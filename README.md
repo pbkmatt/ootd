@@ -2,6 +2,9 @@
 
 v1 necessities
 
+ContentView:
+if logged out, trendingView
+
 signinview:
 login/signup (google, local, phone #?) - uid, username, firstname lastname
 
