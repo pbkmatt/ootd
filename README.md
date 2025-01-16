@@ -2,22 +2,22 @@
 
 Concept: iOS app that merges the spontaneity of BeReal, the inspiration of Pinterest, and the shopping functionality of LTK. 
 
-development plan:
-day 1: project setup - connect xcode to firebase, basic landingview visible
-day 2: authentication - users can sign up, log in, and have their data saved in firestore
-day 3: profile setup - create userprofileview & publicprofileview - profiles work
-day 4: camera and post watermark - users can take live photos and it will apply watermark
-day 5: post ootd - users can create and save posts w/ captions and tags.
-day 6: feed implementation - users can see the post feed and trending feed
-day 7: favorites functionality - users can favorite posts, and favs appear in favs tab
-day 8: comments functionality - users can add, view, and delete comments on posts
-day 9: notifications - all notifications work as they should
-# need LLC day 10: explore and recommendations - build working explore and recommendations engine
-day 11: social sharing and deep linking - users can share posts and links open the app. 
-day 12: security rules and analytics - data is secure, and analytics are tracking key app interactions
-day 13: ui/ux enhancements - redesign all aspects of app entirely with ootd BRAND 
-day 14: testing & deployment - make sure it works on computer, and push to app store to start closed beta. 
-
+development schedule:
+1: project initialization - functional project linked w/ firebase w/ basic LandingView
+2: auth system - users can sign up, log in, and save profile details
+3: profile management - fully functional profile views w/ editable user data
+4: camera & watermark - camera and ootd watermark work
+5: post ootd - users can create & save ootd posts w/ captions & tagged items
+6: feed & trending - users can view feed and trending content seamlessly
+7: favorites function - working favorites & favorites tab
+8: comments function - comment system entirely works
+9: notifications - apply notifications to all relevant actions and send to phone
+10: explore & recommendation engine - search and discover profiles and content
+11: social sharing & deep linking - share to instagram, shared links work correctly
+12: analytics & security - analytics track interactions, data is secure
+13: ui/ux polish - make app beautiful & consistent w/ brand
+14: maintenance & cleanup - make sure app is clean and stable, send to deploy
+15: app store prep & submission - push to app store, start closed beta
 
 User ability:
 - Share their Outfit of the Day (OOTD) via a live photo.
@@ -29,7 +29,7 @@ User ability:
 Functionalities:
   General:
     Guest Access:
-      Guests can browse trending posts and public profiles but cannot interact (e.g., favorite, comment, or post).
+      Guests can browse trending posts and public profiles but cannot interact (e.g. favorite, comment, or post).
     Post Watermark:
       Every post has the "ootd.png" watermark in the bottom-right corner.
     Live Photo Upload:
@@ -120,17 +120,16 @@ LoggedInView:
       Profile (top middle):
         instead of OOTD.png in top middle, instead it's the username which is above
         profile picture which is above
-        username which is above 
+        full name, which is next to clickable instagram handle if included, which is above 
         followers (#) button & following (#) button next to eachother
       Today's OOTD:
         Large post in the middle of the screen. Clickable to go to postView.
       Your OOTDs:
-        Grid of posts created by the in the LAST 7 DAYS.
-          i.e if they've only posted 3 times in the last 7 days, only 3 posts will show.
+        Grid of all posts created in chronological order, 3 posts per row. if you click any post, it goes to the postView for those posts. 
     Home Button (home icon in top left)
       Navigates to LoggedInView
     Favorites Tab (star in top right)
-      Grid of posts favorited by the user in the last 7 days (visible only to the user)
+      Grid of posts favorited by the user (visible only to the user)
     Settings Tab (settings icon in top right)
       adjust username, bio, and profile picture
       toggle between public/private profile button
@@ -140,16 +139,15 @@ LoggedInView:
       When a guest or other user clicks a profile, this is what they see.
       Sections:
         Profile (top middle):
-          instead of OOTD.png in top middle, instead it's the username which is above
+          instead of OOTD.png in top middle, instead it's the @username which is above
           profile picture which is above
-          username which is above 
+          full name, which is next to clickable instagram handle if included, which is above
           followedBy string (see below) which is above
           followers (#) button & following (#) button next to eachother
         Today's OOTD:
           Large post in the middle of the screen. Clickable to go to postView.
         {firstname}'s OOTDs:
-          Grid of posts created by the user in the LAST 7 DAYS. all Clickable to go to postView.
-          i.e if they've only posted 3 times in the last 7 days, only 3 posts will show.
+          Grid of posts created by the user, each one Clickable to go to PostView.
       Home Button (home icon in top left)
         Navigates to LoggedInView
       followedBy string:
@@ -169,7 +167,7 @@ LoggedInView:
 
 
   FavoritesView:
-    shows in a grid all posts a user has favorited (which still exist -- if they're over 7 days old, the posts no longer exist publicly)
+    shows in a grid all posts a user has favorited
     Each post is clickable which will send to the PostView
 
   PostView:
@@ -206,7 +204,7 @@ LoggedInView:
                 copies post link and sends success message 
           Post Link:
             each post has a postid attached, so if you click url/postid on ios it will open directly to the postview
-            if somehow someone opens a postview for a post that's over 7 days old, it will send them to the posters PublicProfileView  
+          
           
                   
   SignUpView / LogInView:
@@ -241,7 +239,8 @@ LoggedInView:
     Search for other users:
       Exact same functionality to VSCO's explore/search feature. 
     Search for items:
-      Ex: "Nike Shirt" will rely on a built-in search engine to pull up posts with items titled "Nike shirt" or something similar.  
+      Ex: "Nike Shirt" will rely on a built-in search engine to pull up posts with items titled "Nike shirt" or something similar.
+    Only one search bar, where the page will look identical to vsco's
 
   RecommendationsView:
     Functions the exact same way as BeReal recommendations, lists profile by profile based on number of mutual friends.
@@ -279,9 +278,6 @@ Backend:
       Folder structure:
         /users/{userId}/profilePicture.jpg
         /posts/{postId}/image.jpg
-    Enable automatic deletion:
-      Posts older than 7 days
-      Images for deleted accounts or posts
       
   Notifications
     Firebase Cloud Messaging:
@@ -340,9 +336,7 @@ In-App Browser
 Maintenance & Cleanup
   Set up Cloud Functions:
     Automate:
-      Deletion of posts older than 7 days.
-      Notifications for expired posts.
-    Cleaning up user data upon account deletion.
+      Cleaning up user data upon account deletion.
     
 Hosting
   Set up Firebase Hosting:
