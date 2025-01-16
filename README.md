@@ -2,6 +2,23 @@
 
 Concept: iOS app that merges the spontaneity of BeReal, the inspiration of Pinterest, and the shopping functionality of LTK. 
 
+development plan:
+day 1: project setup - connect xcode to firebase, basic landingview visible
+day 2: authentication - users can sign up, log in, and have their data saved in firestore
+day 3: profile setup - create userprofileview & publicprofileview - profiles work
+day 4: camera and post watermark - users can take live photos and it will apply watermark
+day 5: post ootd - users can create and save posts w/ captions and tags.
+day 6: feed implementation - users can see the post feed and trending feed
+day 7: favorites functionality - users can favorite posts, and favs appear in favs tab
+day 8: comments functionality - users can add, view, and delete comments on posts
+day 9: notifications - all notifications work as they should
+# need LLC day 10: explore and recommendations - build working explore and recommendations engine
+day 11: social sharing and deep linking - users can share posts and links open the app. 
+day 12: security rules and analytics - data is secure, and analytics are tracking key app interactions
+day 13: ui/ux enhancements - redesign all aspects of app entirely with ootd BRAND 
+day 14: testing & deployment - make sure it works on computer, and push to app store to start closed beta. 
+
+
 User ability:
 - Share their Outfit of the Day (OOTD) via a live photo.
 - Tag and share links to the items they’re wearing.
