@@ -1,23 +1,23 @@
 # ootd v1
 
-Concept: iOS app that merges the spontaneity of BeReal, the inspiration of Pinterest, and the shopping functionality of LTK. 
-
 development schedule:
-1: project initialization - functional project linked w/ firebase w/ basic LandingView
-2: auth system - users can sign up, log in, and save profile details
-3: profile management - fully functional profile views w/ editable user data
-4: camera & watermark - camera and ootd watermark work
-5: post ootd - users can create & save ootd posts w/ captions & tagged items
-6: feed & trending - users can view feed and trending content seamlessly
-7: favorites function - working favorites & favorites tab
-8: comments function - comment system entirely works
-9: notifications - apply notifications to all relevant actions and send to phone
-10: explore & recommendation engine - search and discover profiles and content
-11: social sharing & deep linking - share to instagram, shared links work correctly
-12: analytics & security - analytics track interactions, data is secure
-13: ui/ux polish - make app beautiful & consistent w/ brand
-14: maintenance & cleanup - make sure app is clean and stable, send to deploy
-15: app store prep & submission - push to app store, start closed beta
+1: setup & auth - successful signup and login/logout
+2: user profile - create & edit profiles, toggle privacy.
+3: home & trending feeds - check that trending logic works, ensure guest access
+4: post ootd - live photos & watermark work & appear on userprofile
+5: userprofileview - profile updates & posts are shown correctly, logout validates
+6: favorites func - favorite/unfavorited posts verify in firestore
+7: comments func - post and delete comments, check ui updates
+8: notifications - notifications deliver
+9: explore & recommendations - search for users & tagged items
+10: social sharing/deep linking - deep link behavior works, instagram opens properly
+11: public/private profiles - accept/reject requests
+12: security & data validation - bug test & track metrics
+13: UI polish - make it look good
+14: deployment for closed beta
+
+
+Concept: iOS app that merges the spontaneity of BeReal, the inspiration of Pinterest, and the shopping functionality of LTK. 
 
 User ability:
 - Share their Outfit of the Day (OOTD) via a live photo.
