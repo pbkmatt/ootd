@@ -1,10 +1,11 @@
 # ootd v1
 
 development schedule:
-1: setup & auth - successful signup and login/logout
-2: user profile - create & edit profiles, toggle privacy.
-3: home & trending feeds - check that trending logic works, ensure guest access
-4: post ootd - live photos & watermark work & appear on userprofile
+# 1: setup & auth - successful signup and login/logout
+# 2: user profile - create & edit profiles, toggle privacy.
+# 3: post ootd - live photos & watermark work & appear on userprofile
+jan 21 update - need to update some tech and figure out how to get this testing on my phone instead of computer. hopefully will solve this today so i can go forward with testing and dev
+4: home & trending feeds - check that trending logic works, ensure guest access
 5: userprofileview - profile updates & posts are shown correctly, logout validates
 6: favorites func - favorite/unfavorited posts verify in firestore
 7: comments func - post and delete comments, check ui updates
