@@ -1,14 +1,9 @@
 import SwiftUI
-import FirebaseAuth
-import FirebaseFirestore
 
 struct LoggedInView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var username: String = ""
-    @State private var bio: String = ""
-    @State private var profilePictureURL: String = ""
-    @State private var isLoading: Bool = true
-    @State private var selectedTab = 0
+    @State private var selectedTab: Int = 0
+    @State private var capturedImage: UIImage? = nil // State to hold the captured image
+    @State private var showPostOOTDView = false // State to control PostOOTDView presentation
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -26,10 +21,10 @@ struct LoggedInView: View {
                 }
                 .tag(1)
 
-            PostOOTDView()
+            CameraCaptureView(capturedImage: $capturedImage)
                 .tabItem {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Post OOTD")
+                    Image(systemName: "camera.fill")
+                    Text("Capture")
                 }
                 .tag(2)
 
@@ -47,40 +42,15 @@ struct LoggedInView: View {
                 }
                 .tag(4)
         }
-        .navigationTitle(selectedTab == 0 ? "Following" : selectedTab == 1 ? "Trending" : selectedTab == 2 ? "Post OOTD" : selectedTab == 3 ? "Notifications" : "Profile")
-        .navigationBarItems(trailing: NavigationLink(destination: EditProfileView()) {
-            Image(systemName: "gear")
-                .font(.title)
-        })
-        .onAppear {
-            fetchUserProfile()
-        }
-    }
-
-    private func fetchUserProfile() {
-        guard let uid = Auth.auth().currentUser?.uid else {
-            print("No authenticated user found")
-            return
-        }
-
-        Firestore.firestore().collection("users").document(uid).getDocument { document, error in
-            DispatchQueue.main.async {
-                if let document = document, document.exists, let data = document.data() {
-                    self.username = data["username"] as? String ?? "No Name"
-                    self.bio = data["bio"] as? String ?? "No bio available."
-                    self.profilePictureURL = data["profilePictureURL"] as? String ?? ""
-                } else {
-                    print("Error fetching profile: \(error?.localizedDescription ?? "Unknown error")")
-
-                }
-                self.isLoading = false
+        .onChange(of: capturedImage) { newImage in
+            if let newImage = newImage {
+                showPostOOTDView = true // Trigger PostOOTDView presentation
             }
         }
-    }
-}
-
-struct LoggedInView_Previews: PreviewProvider {
-    static var previews: some View {
-        LoggedInView().environmentObject(AuthViewModel())
+        .sheet(isPresented: $showPostOOTDView) {
+            if let image = capturedImage {
+                PostOOTDView(capturedImage: image)
+            }
+        }
     }
 }
