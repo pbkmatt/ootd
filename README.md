@@ -1,23 +1,5 @@
 # ootd v1
 
-development schedule:
-# 1: setup & auth - successful signup and login/logout
-# 2: user profile - create & edit profiles, toggle privacy.
-# 3: post ootd - live photos & watermark work & appear on userprofile
-jan 21 update - need to update some tech and figure out how to get this testing on my phone instead of computer. hopefully will solve this today so i can go forward with testing and dev
-4: home & trending feeds - check that trending logic works, ensure guest access
-5: userprofileview - profile updates & posts are shown correctly, logout validates
-6: favorites func - favorite/unfavorited posts verify in firestore
-7: comments func - post and delete comments, check ui updates
-8: notifications - notifications deliver
-9: explore & recommendations - search for users & tagged items
-10: social sharing/deep linking - deep link behavior works, instagram opens properly
-11: public/private profiles - accept/reject requests
-12: security & data validation - bug test & track metrics
-13: UI polish - make it look good
-14: deployment for closed beta
-
-
 Concept: iOS app that merges the spontaneity of BeReal, the inspiration of Pinterest, and the shopping functionality of LTK. 
 
 User ability:
@@ -343,5 +325,33 @@ Hosting
   Set up Firebase Hosting:
     Serve app-specific links for shared posts.
     Create a homepage for users accessing the app from non-iOS platforms.
+
+Firebase Structure:
+Firestore Structure
+users collection:
+{
+  "uid": "user123",
+  "username": "fashionista",
+  "email": "user123@gmail.com",
+  "bio": "Love my outfits!",
+  "profilePictureURL": "https://...",
+  "followersCount": 100,
+  "followingCount": 50,
+  "isPrivateProfile": false,
+  "createdAt": <timestamp>
+}
+posts subcollection under each user:
+{
+  "imageURL": "https://...",
+  "caption": "OOTD at the park!",
+  "taggedItems": [
+    { "title": "Hat", "link": "https://hat.com" }
+  ],
+  "timestamp": <timestamp>,
+  "userID": "user123"
+}
+Firebase Storage
+profile_pictures/{uid}.jpg
+OOTDPosts/{uniqueID}.jpg
 
   
