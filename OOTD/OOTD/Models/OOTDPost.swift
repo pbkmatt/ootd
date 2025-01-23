@@ -9,14 +9,18 @@
 import Foundation
 import FirebaseFirestore
 
-struct OOTDPost: Identifiable, Codable {
+struct OOTDPost: Identifiable, Decodable {
     @DocumentID var id: String?
-    var imageURL: String
     var caption: String
-    var taggedItems: [OOTDItem]
-    var timestamp: Date
+    var imageURL: String
+    var taggedItems: [String] // Adjust type if `taggedItems` is an array of dictionaries
+    var timestamp: Timestamp
+    var visibility: String // e.g., "public" or "private"
+    var commentsCount: Int
+    var favoritesCount: Int
     var userID: String
 }
+
 
 struct OOTDItem: Identifiable, Codable {
     var id = UUID().uuidString

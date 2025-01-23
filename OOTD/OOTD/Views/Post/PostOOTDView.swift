@@ -13,7 +13,7 @@ struct PostOOTDView: View {
     @Environment(\.presentationMode) private var presentationMode
     @State private var showAlert = false
     @State private var alertMessage = ""
-
+    
     var body: some View {
         NavigationView {
             VStack {
@@ -23,14 +23,14 @@ struct PostOOTDView: View {
                     .frame(maxHeight: 300)
                     .cornerRadius(10)
                     .padding()
-
+                
                 TextField("Write a caption...", text: $caption)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding()
-
+                
                 TagInputView(tags: $tags)
                     .padding()
-
+                
                 if isUploading {
                     ProgressView(value: uploadProgress, total: 1.0)
                         .padding()
@@ -57,83 +57,126 @@ struct PostOOTDView: View {
             }
         }
     }
-
+    
     func uploadPost() {
         isUploading = true
 
-        // Convert UIImage to Data
-        guard let imageData = capturedImage.jpegData(compressionQuality: 0.8) else {
-            alertMessage = "Failed to process the image."
-            showAlert = true
-            isUploading = false
-            return
-        }
+        // Fetch the username from Firestore
+        fetchUsername { username in
+            // Add watermark with the username
+            let watermarkedImage = capturedImage.addWatermark(
+                username: username,
+                fontName: "BebasNeue-Regular",
+                fontSize: max(capturedImage.size.width, capturedImage.size.height) / 20, // Dynamically scale font size
+                textColor: .white
+            )
 
-        // Create unique filename
-        let fileName = UUID().uuidString + ".jpg"
-        let storageRef = Storage.storage().reference().child("posts/\(fileName)")
-
-        // Upload image to Firebase Storage
-        let uploadTask = storageRef.putData(imageData, metadata: nil) { _, error in
-            if let error = error {
-                alertMessage = "Image upload failed: \(error.localizedDescription)"
+            // Convert the watermarked image to Data
+            guard let imageData = watermarkedImage.jpegData(compressionQuality: 0.8) else {
+                alertMessage = "Failed to process the image."
                 showAlert = true
                 isUploading = false
                 return
             }
 
-            // Retrieve the download URL
-            storageRef.downloadURL { url, error in
+            // Create unique filename for Firebase Storage
+            let fileName = UUID().uuidString + ".jpg"
+            let storageRef = Storage.storage().reference().child("posts/\(fileName)")
+
+            // Upload the image to Firebase Storage
+            storageRef.putData(imageData, metadata: nil) { _, error in
                 if let error = error {
-                    alertMessage = "Failed to retrieve download URL: \(error.localizedDescription)"
+                    print("Error uploading image to Firebase Storage: \(error.localizedDescription)")
+                    alertMessage = "Image upload failed: \(error.localizedDescription)"
                     showAlert = true
                     isUploading = false
                     return
                 }
 
-                guard let url = url else {
-                    alertMessage = "Download URL is nil."
-                    showAlert = true
-                    isUploading = false
-                    return
+                // Retrieve the download URL for the uploaded image
+                storageRef.downloadURL { url, error in
+                    if let error = error {
+                        print("Error getting download URL: \(error.localizedDescription)")
+                        alertMessage = "Failed to retrieve download URL: \(error.localizedDescription)"
+                        showAlert = true
+                        isUploading = false
+                        return
+                    }
+
+                    guard let url = url else {
+                        print("Download URL is nil.")
+                        alertMessage = "Download URL is nil."
+                        showAlert = true
+                        isUploading = false
+                        return
+                    }
+
+                    print("Image uploaded successfully. URL: \(url.absoluteString)")
+
+                    // Save post to Firestore
+                    self.savePostToFirestore(imageURL: url.absoluteString)
                 }
-
-                // Save post data to Firestore
-                savePostToFirestore(imageURL: url.absoluteString)
-            }
-        }
-
-        // Monitor upload progress
-        uploadTask.observe(.progress) { snapshot in
-            if let progress = snapshot.progress {
-                uploadProgress = progress.fractionCompleted
             }
         }
     }
 
+    
     func savePostToFirestore(imageURL: String) {
-        let db = Firestore.firestore()
-        let postsCollection = db.collection("posts")
+        guard let userId = Auth.auth().currentUser?.uid else {
+            alertMessage = "Failed to retrieve user ID."
+            showAlert = true
+            isUploading = false
+            return
+        }
 
+        let db = Firestore.firestore()
+        let userPostsCollection = db.collection("users").document(userId).collection("posts")
+
+        // Create post data
         let postData: [String: Any] = [
+            "caption": caption.isEmpty ? "No caption" : caption,
             "imageURL": imageURL,
-            "caption": caption,
-            "tags": tags,
+            "taggedItems": tags.isEmpty ? [] : tags,
             "timestamp": Timestamp(),
-            "likes": 0,
-            "comments": 0,
-            "userId": Auth.auth().currentUser?.uid ?? "guest"
+            "visibility": "public", // Default to public visibility
+            "commentsCount": 0, // Default value
+            "favoritesCount": 0, // Default value
+            "userID": userId // Ensure userID is the authenticated user's UID
         ]
 
-        postsCollection.addDocument(data: postData) { error in
+        // Save post to Firestore
+        print("Saving post with data: \(postData)")
+        userPostsCollection.addDocument(data: postData) { error in
             isUploading = false
+
             if let error = error {
+                print("Error saving post to Firestore: \(error.localizedDescription)")
                 alertMessage = "Failed to save post: \(error.localizedDescription)"
                 showAlert = true
                 return
             }
 
+            print("Post saved successfully in Firestore!")
             presentationMode.wrappedValue.dismiss()
         }
     }
+    func fetchUsername(completion: @escaping (String) -> Void) {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            completion("guest") // Default to "guest" if no authenticated user
+            return
+        }
+
+        Firestore.firestore().collection("users").document(userId).getDocument { document, error in
+            if let error = error {
+                print("Error fetching username: \(error.localizedDescription)")
+                completion("guest") // Default to "guest" on error
+                return
+            }
+
+            let username = document?.data()?["username"] as? String ?? "guest"
+            completion(username)
+        }
+    }
+
+
 }

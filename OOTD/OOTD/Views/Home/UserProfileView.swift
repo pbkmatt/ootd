@@ -5,50 +5,42 @@ import FirebaseFirestore
 struct UserProfileView: View {
     @State private var username: String = ""
     @State private var fullName: String = ""
-    @State private var instagramHandle: String = ""
     @State private var bio: String = ""
     @State private var profilePictureURL: String = ""
     @State private var posts: [OOTDPost] = []
     @State private var favorites: [OOTDPost] = []
-    @State private var isPrivateProfile: Bool = false
-    @State private var isLoading: Bool = true
     @State private var followersCount: Int = 0
     @State private var followingCount: Int = 0
+    @State private var isLoading: Bool = true
     @EnvironmentObject var authViewModel: AuthViewModel
 
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack {
+                VStack(spacing: 16) {
                     if isLoading {
                         ProgressView("Loading profile...")
                     } else {
                         profileHeader
-                        Divider().padding()
+                        statsAndBio
                         todaysOOTD
                         yourOOTDs
                     }
                 }
-                .padding()
+                .padding(.horizontal)
             }
             .navigationTitle(username.isEmpty ? "Profile" : "@\(username)")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationBarItems(
-                leading: Button(action: {
-                    // Navigate to Home
-                }) {
-                    Image(systemName: "house.fill")
-                        .font(.title)
-                        .foregroundColor(.blue)
-                },
                 trailing: HStack {
                     NavigationLink(destination: FavoritesView(favorites: favorites)) {
                         Image(systemName: "star.fill")
-                            .font(.title)
+                            .font(.title2)
                             .foregroundColor(.yellow)
                     }
                     NavigationLink(destination: SettingsView()) {
                         Image(systemName: "gearshape.fill")
-                            .font(.title)
+                            .font(.title2)
                             .foregroundColor(.gray)
                     }
                 }
@@ -60,121 +52,132 @@ struct UserProfileView: View {
         }
     }
 
-    // Profile Header Section
+    // MARK: - Profile Header
     private var profileHeader: some View {
-        VStack {
-            Text(username.isEmpty ? "No Username Set" : "@\(username)")
-                .font(.title)
-                .bold()
-                .padding(.top, 8)
-
+        VStack(spacing: 12) {
             if let url = URL(string: profilePictureURL), !profilePictureURL.isEmpty {
                 AsyncImage(url: url) { image in
                     image.resizable()
-                        .scaledToFit()
+                        .scaledToFill()
                         .frame(width: 100, height: 100)
                         .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.gray, lineWidth: 2))
+                        .overlay(Circle().stroke(Color.gray.opacity(0.5), lineWidth: 2))
                 } placeholder: {
                     ProgressView()
                 }
             } else {
                 Image(systemName: "person.circle.fill")
                     .resizable()
+                    .scaledToFit()
                     .frame(width: 100, height: 100)
                     .foregroundColor(.gray)
             }
 
             Text(fullName.isEmpty ? "No Full Name" : fullName)
-                .font(.headline)
+                .font(Font.custom("YourCustomFont-Bold", size: 20))
+                .foregroundColor(.primary)
 
-            if !instagramHandle.isEmpty {
-                Link(instagramHandle, destination: URL(string: "https://instagram.com/\(instagramHandle)")!)
-                    .foregroundColor(.blue)
-            }
-
-            HStack {
-                VStack {
-                    Text("\(followersCount)")
-                        .font(.headline)
-                    Text("Followers")
-                        .font(.subheadline)
-                }
-                .padding(.horizontal)
-
-                VStack {
-                    Text("\(followingCount)")
-                        .font(.headline)
-                    Text("Following")
-                        .font(.subheadline)
-                }
-                .padding(.horizontal)
-            }
-
-            Text(bio.isEmpty ? "No Bio Set" : bio)
-                .font(.body)
-                .foregroundColor(.gray)
-                .padding(.top, 4)
+            Text(username.isEmpty ? "@username" : "@\(username)")
+                .font(Font.custom("YourCustomFont-Regular", size: 16))
+                .foregroundColor(.secondary)
         }
     }
 
-    // Today's OOTD Section
+    // MARK: - Stats and Bio
+    private var statsAndBio: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 40) {
+                VStack {
+                    Text("\(followersCount)")
+                        .font(Font.custom("YourCustomFont-Bold", size: 18))
+                    Text("Followers")
+                        .font(Font.custom("YourCustomFont-Regular", size: 14))
+                        .foregroundColor(.secondary)
+                }
+
+                VStack {
+                    Text("\(followingCount)")
+                        .font(Font.custom("YourCustomFont-Bold", size: 18))
+                    Text("Following")
+                        .font(Font.custom("YourCustomFont-Regular", size: 14))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if !bio.isEmpty {
+                Text(bio)
+                    .font(Font.custom("YourCustomFont-Regular", size: 14))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    // MARK: - Today's OOTD
     private var todaysOOTD: some View {
-        VStack {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Today's OOTD")
-                .font(.headline)
-                .padding(.bottom, 8)
+                .font(Font.custom("YourCustomFont-Bold", size: 18))
+                .padding(.horizontal)
 
             if let latestPost = posts.first {
                 NavigationLink(destination: PostView(post: latestPost)) {
                     AsyncImage(url: URL(string: latestPost.imageURL)) { image in
                         image.resizable()
                             .scaledToFit()
-                            .frame(height: 300)
                             .cornerRadius(10)
                     } placeholder: {
                         ProgressView()
                     }
+                    .frame(maxHeight: 300) // Prominent display for today's OOTD
+                    .padding(.horizontal)
                 }
             } else {
                 Text("No OOTD posted today")
+                    .font(Font.custom("YourCustomFont-Regular", size: 14))
                     .foregroundColor(.gray)
+                    .padding(.horizontal)
             }
         }
-        .padding(.top)
     }
 
-    // User's OOTDs Section
+    // MARK: - User's OOTDs Grid
     private var yourOOTDs: some View {
-        VStack {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Your OOTDs")
-                .font(.headline)
-                .padding(.bottom, 8)
+                .font(Font.custom("YourCustomFont-Bold", size: 18))
+                .padding(.horizontal)
 
-            if posts.isEmpty {
-                Text("No OOTDs yet!")
-                    .foregroundColor(.gray)
-                    .padding()
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]) {
-                    ForEach(posts) { post in
+            if posts.count > 1 {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    ForEach(posts.dropFirst()) { post in // Exclude the most recent post
                         NavigationLink(destination: PostView(post: post)) {
                             AsyncImage(url: URL(string: post.imageURL)) { image in
                                 image.resizable()
                                     .scaledToFill()
-                                    .frame(height: 100)
-                                    .cornerRadius(10)
+                                    .frame(width: UIScreen.main.bounds.width / 3 - 12, height: UIScreen.main.bounds.width / 3 - 12)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                             } placeholder: {
-                                ProgressView()
+                                Color.gray.opacity(0.3)
+                                    .frame(width: UIScreen.main.bounds.width / 3 - 12, height: UIScreen.main.bounds.width / 3 - 12)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
                         }
                     }
                 }
+                .padding(.horizontal)
+            } else {
+                Text("No additional OOTDs yet!")
+                    .font(Font.custom("YourCustomFont-Regular", size: 14))
+                    .foregroundColor(.gray)
+                    .padding()
             }
         }
         .padding(.top)
     }
 
+    // MARK: - Fetch User Profile
     private func fetchUserProfile() {
         guard let uid = Auth.auth().currentUser?.uid else {
             print("No authenticated user found")
@@ -186,10 +189,8 @@ struct UserProfileView: View {
                 if let document = document, document.exists, let data = document.data() {
                     self.username = data["username"] as? String ?? "No Username"
                     self.fullName = data["fullName"] as? String ?? "No Full Name"
-                    self.instagramHandle = data["instagramHandle"] as? String ?? ""
                     self.bio = data["bio"] as? String ?? "No bio available"
                     self.profilePictureURL = data["profilePictureURL"] as? String ?? ""
-                    self.isPrivateProfile = data["isPrivateProfile"] as? Bool ?? false
                     self.followersCount = data["followersCount"] as? Int ?? 0
                     self.followingCount = data["followingCount"] as? Int ?? 0
                 } else {
@@ -200,48 +201,33 @@ struct UserProfileView: View {
         }
     }
 
+    // MARK: - Fetch User Posts
     private func fetchUserPosts() {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("No authenticated user found")
+            return
+        }
 
-        Firestore.firestore().collection("users").document(uid).collection("posts")
+        let db = Firestore.firestore()
+        db.collection("users").document(userId).collection("posts")
             .order(by: "timestamp", descending: true)
             .getDocuments { snapshot, error in
                 DispatchQueue.main.async {
+                    if let error = error {
+                        print("Error fetching posts: \(error.localizedDescription)")
+                        return
+                    }
+
                     if let snapshot = snapshot {
                         self.posts = snapshot.documents.compactMap { doc -> OOTDPost? in
                             try? doc.data(as: OOTDPost.self)
                         }
+                        print("Fetched \(self.posts.count) posts.")
                     } else {
-                        print("Error fetching posts: \(error?.localizedDescription ?? "Unknown error")")
+                        print("No posts found.")
                     }
                 }
             }
     }
+
 }
-
-struct FavoritesView: View {
-    var favorites: [OOTDPost]
-
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]) {
-                ForEach(favorites) { post in
-                    if let url = URL(string: post.imageURL) {
-                        AsyncImage(url: url) { image in
-                            image.resizable()
-                                .scaledToFill()
-                                .frame(height: 100)
-                                .cornerRadius(10)
-                        } placeholder: {
-                            ProgressView()
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Favorites")
-    }
-}
-
-
-
