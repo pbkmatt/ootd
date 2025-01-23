@@ -2,57 +2,48 @@ import SwiftUI
 
 struct LoggedInView: View {
     @State private var selectedTab: Int = 0
-    @State private var capturedImage: UIImage? = nil // State to hold the captured image
-    @State private var showPostView = false // State to present PostOOTDView
 
     var body: some View {
-        ZStack {
-            TabView(selection: $selectedTab) {
-                FollowingView()
-                    .tabItem {
-                        Image(systemName: "house.fill")
-                        Text("Following")
-                    }
-                    .tag(0)
+        TabView(selection: $selectedTab) {
+            // Home (Feed)
+            HomeView()
+                .tabItem {
+                    Image(systemName: "house.fill")
+                }
+                .tag(0)
 
-                TrendingView()
-                    .tabItem {
-                        Image(systemName: "flame.fill")
-                        Text("Trending")
-                    }
-                    .tag(1)
+            // Explore (Discover)
+            ExploreView()
+                .tabItem {
+                    Image(systemName: "magnifyingglass")
+                }
+                .tag(1)
 
-                CameraCaptureView(capturedImage: $capturedImage)
-                    .tabItem {
-                        Image(systemName: "camera.fill")
-                        Text("Capture")
-                    }
-                    .tag(2)
+            // Capture
+            CameraCaptureView()
+                .tabItem {
+                    Image(systemName: "camera.fill")
+                }
+                .tag(2)
 
-                NotificationsView()
-                    .tabItem {
-                        Image(systemName: "bell.fill")
-                        Text("Notifications")
-                    }
-                    .tag(3)
+            // Notifications
+            NotificationsView()
+                .tabItem {
+                    Image(systemName: "bell.fill")
+                }
+                .tag(3)
 
-                UserProfileView()
-                    .tabItem {
-                        Image(systemName: "person.fill")
-                        Text("Profile")
-                    }
-                    .tag(4)
-            }
+            // Profile
+            UserProfileView()
+                .tabItem {
+                    Image(systemName: "person.circle.fill")
+                }
+                .tag(4)
         }
-        .onChange(of: capturedImage) {
-            if capturedImage != nil {
-                showPostView = true // Trigger PostOOTDView
-            }
-        }
-        .sheet(isPresented: $showPostView) {
-            if let image = capturedImage {
-                PostOOTDView(capturedImage: image)
-            }
+        .accentColor(.black) // Use a sleek color for the selected tab
+        .onAppear {
+            UITabBar.appearance().backgroundColor = UIColor.systemBackground
+            UITabBar.appearance().isTranslucent = false
         }
     }
 }

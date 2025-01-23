@@ -72,7 +72,7 @@ struct PostOOTDView: View {
             )
 
             // Convert the watermarked image to Data
-            guard let imageData = watermarkedImage.jpegData(compressionQuality: 0.8) else {
+            guard let imageData = watermarkedImage.jpegData(compressionQuality: 0.9) else {
                 alertMessage = "Failed to process the image."
                 showAlert = true
                 isUploading = false

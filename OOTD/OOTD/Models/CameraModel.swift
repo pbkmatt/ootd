@@ -147,7 +147,7 @@ final class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelega
         let watermarkedImage = image.addWatermark(
             username: username,
             fontName: "BebasNeue-Regular",
-            fontSize: max(image.size.width, image.size.height) / 20, // Dynamically scale font size
+            fontSize: max(image.size.width, image.size.height) / 0.0, // Dynamically scale font size
             textColor: .white
         )
 
