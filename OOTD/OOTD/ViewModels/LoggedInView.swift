@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LoggedInView: View {
     @State private var selectedTab: Int = 0
+    @State private var capturedImage: UIImage? = nil // State for captured image
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -20,7 +21,7 @@ struct LoggedInView: View {
                 .tag(1)
 
             // Capture
-            CameraCaptureView()
+            CameraCaptureView(capturedImage: $capturedImage) // Pass the binding here
                 .tabItem {
                     Image(systemName: "camera.fill")
                 }
@@ -40,10 +41,6 @@ struct LoggedInView: View {
                 }
                 .tag(4)
         }
-        .accentColor(.black) // Use a sleek color for the selected tab
-        .onAppear {
-            UITabBar.appearance().backgroundColor = UIColor.systemBackground
-            UITabBar.appearance().isTranslucent = false
-        }
+        .accentColor(.black)
     }
 }

@@ -1,22 +1,10 @@
-//
-//  PostGrid.swift
-//  OOTD
-//
-//  Created by Matt Imhof on 1/22/25.
-//
-
-
 import SwiftUI
 
 struct PostGrid: View {
-    let posts: [OOTDPost]
-    let columns: [GridItem] = [
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
+    let posts: [OOTDPost] // Filtered list of posts for this view
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 16) {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
             ForEach(posts) { post in
                 NavigationLink(destination: PostDetailView(post: post)) {
                     PostGridItem(post: post)
@@ -33,18 +21,19 @@ struct PostGridItem: View {
     var body: some View {
         if let url = URL(string: post.imageURL) {
             AsyncImage(url: url) { image in
-                image
-                    .resizable()
+                image.resizable()
                     .scaledToFill()
                     .frame(width: UIScreen.main.bounds.width / 2 - 20, height: UIScreen.main.bounds.width / 2 - 20)
-                    .clipped()
                     .cornerRadius(10)
             } placeholder: {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
+                Color.gray
                     .frame(width: UIScreen.main.bounds.width / 2 - 20, height: UIScreen.main.bounds.width / 2 - 20)
                     .cornerRadius(10)
             }
+        } else {
+            Color.gray
+                .frame(width: UIScreen.main.bounds.width / 2 - 20, height: UIScreen.main.bounds.width / 2 - 20)
+                .cornerRadius(10)
         }
     }
 }

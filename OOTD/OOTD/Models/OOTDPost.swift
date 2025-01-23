@@ -27,3 +27,20 @@ struct OOTDItem: Identifiable, Codable {
     var title: String
     var link: String
 }
+
+struct Comment: Identifiable, Codable {
+    var id: String
+    var username: String
+    var text: String
+    var timestamp: Timestamp
+
+    func toDict() -> [String: Any] {
+        return [
+            "id": id,
+            "username": username,
+            "text": text,
+            "timestamp": timestamp
+        ]
+    }
+}
+

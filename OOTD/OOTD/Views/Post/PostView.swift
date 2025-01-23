@@ -105,31 +105,54 @@ struct PostView: View {
 
     private func loadComments() {
         let db = Firestore.firestore()
-        db.collection("posts").document(post.id ?? "").collection("comments")
+        guard let postId = post.id else { return }
+
+        db.collection("posts")
+            .document(postId)
+            .collection("comments")
             .order(by: "timestamp", descending: true)
             .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error loading comments: \(error.localizedDescription)")
+                    return
+                }
+
                 if let snapshot = snapshot {
                     self.comments = snapshot.documents.compactMap { doc -> Comment? in
                         try? doc.data(as: Comment.self)
                     }
+                    print("Loaded \(self.comments.count) comments.")
                 }
             }
     }
 
     private func addComment() {
         guard !newComment.isEmpty, let uid = Auth.auth().currentUser?.uid else { return }
-        
-        let comment = Comment(id: UUID().uuidString, userID: uid, username: authViewModel.currentUsername, text: newComment, timestamp: Date())
 
-        Firestore.firestore().collection("posts").document(post.id ?? "").collection("comments")
+        // Create Comment object
+        let comment = Comment(
+            id: UUID().uuidString,
+            username: authViewModel.currentUsername ?? "Anonymous",
+            text: newComment,
+            timestamp: Timestamp(date: Date()) // Convert Date to Timestamp
+        )
+
+        // Add comment to Firestore
+        Firestore.firestore()
+            .collection("posts")
+            .document(post.id ?? "")
+            .collection("comments")
             .document(comment.id)
             .setData(comment.toDict()) { error in
-                if error == nil {
+                if let error = error {
+                    print("Error adding comment: \(error.localizedDescription)")
+                } else {
                     self.comments.append(comment)
-                    self.newComment = ""
+                    self.newComment = "" // Clear the input field
                 }
             }
     }
+
 
     private func toggleFavorite() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
@@ -168,20 +191,3 @@ struct PostView: View {
 
 // Models
 
-struct Comment: Identifiable, Codable {
-    var id: String
-    var userID: String
-    var username: String
-    var text: String
-    var timestamp: Date
-
-    func toDict() -> [String: Any] {
-        return [
-            "id": id,
-            "userID": userID,
-            "username": username,
-            "text": text,
-            "timestamp": timestamp
-        ]
-    }
-}
