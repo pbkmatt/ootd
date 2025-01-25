@@ -61,22 +61,30 @@ struct HomeView: View {
     private func fetchFollowingPosts() {
         guard let currentUserId = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
-
         db.collection("users").document(currentUserId).collection("following").getDocuments { snapshot, error in
-            if let snapshot = snapshot {
-                let followedUserIds = snapshot.documents.map { $0.documentID }
-
-                db.collectionGroup("posts")
-                    .whereField("userID", in: followedUserIds)
-                    .whereField("timestamp", isGreaterThanOrEqualTo: Calendar.current.startOfDay(for: Date()))
-                    .getDocuments { postSnapshot, error in
-                        if let postSnapshot = postSnapshot {
-                            posts = postSnapshot.documents.compactMap { doc -> OOTDPost? in
-                                try? doc.data(as: OOTDPost.self)
-                            }
-                        }
-                    }
+            if let error = error {
+                print("Error fetching following list: \(error.localizedDescription)")
+                return
             }
+
+            let followedUserIds = snapshot?.documents.map { $0.documentID } ?? []
+
+            // Ensure `followedUserIds` is not empty
+            guard !followedUserIds.isEmpty else {
+                print("No followed users, skipping Firestore query.")
+                return
+            }
+
+            db.collectionGroup("posts")
+                .whereField("userID", in: followedUserIds)
+                .whereField("timestamp", isGreaterThanOrEqualTo: Calendar.current.startOfDay(for: Date()))
+                .getDocuments { postSnapshot, postError in
+                    if let postError = postError {
+                        print("Error fetching posts: \(postError.localizedDescription)")
+                    } else {
+                        // Process posts
+                    }
+                }
         }
     }
 
