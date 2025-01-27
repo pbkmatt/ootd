@@ -4,6 +4,7 @@ import AVFoundation
 struct CameraCaptureView: View {
     @Binding var capturedImage: UIImage?
     @StateObject private var cameraModel = CameraModel()
+    @State private var isPostOOTDViewPresented: Bool = false // Track navigation state
 
     var body: some View {
         ZStack {
@@ -72,9 +73,15 @@ struct CameraCaptureView: View {
                 cameraModel.stopSession()
             }
         }
-        .onChange(of: cameraModel.capturedImage) { newImage in
-            if let newImage = newImage {
+        .onChange(of: cameraModel.capturedImage) {
+            if let newImage = cameraModel.capturedImage {
                 capturedImage = newImage
+                isPostOOTDViewPresented = true // Trigger navigation
+            }
+        }
+        .sheet(isPresented: $isPostOOTDViewPresented) {
+            if let image = capturedImage {
+                PostOOTDView(capturedImage: image) // Pass captured image
             }
         }
     }

@@ -13,6 +13,7 @@
 		6C3BDAC62D3DE19400BB6DEB /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 6C3BDAC52D3DE19400BB6DEB /* FirebaseFirestore */; };
 		6C3BDAC82D3DE19400BB6DEB /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 6C3BDAC72D3DE19400BB6DEB /* FirebaseMessaging */; };
 		6C3BDACA2D3DE19400BB6DEB /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 6C3BDAC92D3DE19400BB6DEB /* FirebaseStorage */; };
+		6CF294542D45E51A00042147 /* SwiftyCrop in Frameworks */ = {isa = PBXBuildFile; productRef = 6CF294532D45E51A00042147 /* SwiftyCrop */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +68,7 @@
 			files = (
 				6C3BDAC82D3DE19400BB6DEB /* FirebaseMessaging in Frameworks */,
 				6C3BDAC22D3DE19400BB6DEB /* FirebaseAnalytics in Frameworks */,
+				6CF294542D45E51A00042147 /* SwiftyCrop in Frameworks */,
 				6C3BDAC42D3DE19400BB6DEB /* FirebaseAuth in Frameworks */,
 				6C3BDACA2D3DE19400BB6DEB /* FirebaseStorage in Frameworks */,
 				6C3BDAC62D3DE19400BB6DEB /* FirebaseFirestore in Frameworks */,
@@ -96,6 +98,7 @@
 				6C3BDA8F2D3DDFE500BB6DEB /* OOTD */,
 				6C3BDA8E2D3DDFE500BB6DEB /* Products */,
 				6C3BDABE2D3DE0F700BB6DEB /* GoogleService-Info.plist */,
+				6C75B9C92D45E3A70047727C /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -107,6 +110,13 @@
 				6C3BDAA92D3DDFE700BB6DEB /* OOTDUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		6C75B9C92D45E3A70047727C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -134,6 +144,7 @@
 				6C3BDAC52D3DE19400BB6DEB /* FirebaseFirestore */,
 				6C3BDAC72D3DE19400BB6DEB /* FirebaseMessaging */,
 				6C3BDAC92D3DE19400BB6DEB /* FirebaseStorage */,
+				6CF294532D45E51A00042147 /* SwiftyCrop */,
 			);
 			productName = OOTD;
 			productReference = 6C3BDA8D2D3DDFE500BB6DEB /* OOTD.app */;
@@ -213,6 +224,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				6C3BDAC02D3DE19400BB6DEB /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				6CF294522D45E51A00042147 /* XCRemoteSwiftPackageReference "SwiftyCrop" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6C3BDA8E2D3DDFE500BB6DEB /* Products */;
@@ -594,6 +606,14 @@
 				minimumVersion = 11.7.0;
 			};
 		};
+		6CF294522D45E51A00042147 /* XCRemoteSwiftPackageReference "SwiftyCrop" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/benedom/SwiftyCrop";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -621,6 +641,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6C3BDAC02D3DE19400BB6DEB /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseStorage;
+		};
+		6CF294532D45E51A00042147 /* SwiftyCrop */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6CF294522D45E51A00042147 /* XCRemoteSwiftPackageReference "SwiftyCrop" */;
+			productName = SwiftyCrop;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

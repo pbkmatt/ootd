@@ -8,6 +8,8 @@
 
 import FirebaseFirestore
 import FirebaseAuth
+import UIKit
+import SwiftUI
 
 class ProfileManager {
     static let shared = ProfileManager()

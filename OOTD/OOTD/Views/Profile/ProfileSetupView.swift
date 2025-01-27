@@ -2,120 +2,153 @@ import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
-import PhotosUI
 
 struct ProfileSetupView: View {
-    @State private var username = ""
+    @State private var fullName = ""
     @State private var bio = ""
     @State private var isPrivate = false
+    @State private var instagramHandle = ""
     @State private var profileImage: UIImage? = nil
+    @State private var croppedImage: UIImage? = nil
+    @State private var showImagePicker = false
+    @State private var showCropView = false
     @State private var isLoading = false
     @State private var errorMessage: String?
-    @State private var showImagePicker = false
-    @State private var selectedItem: PhotosPickerItem? = nil
+
     @EnvironmentObject var authViewModel: AuthViewModel
-    @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
-        VStack {
-            Text("Set Up Your Profile")
-                .font(.largeTitle)
-                .bold()
-                .padding()
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 20) {
+                    Text("Set Up Your Profile")
+                        .font(Font.custom("BebasNeue-Regular", size: 28))
+                        .padding(.top, 20)
 
-            TextField("Username", text: $username)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding()
+                    formFields
 
-            TextField("Bio", text: $bio)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding()
+                    profilePictureSection
 
-            Toggle("Private Profile", isOn: $isPrivate)
-                .padding()
+                    saveButton
 
-            PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
-                if let profileImage = profileImage {
-                    Image(uiImage: profileImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 100, height: 100)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.gray, lineWidth: 2))
-                } else {
-                    Image(systemName: "person.crop.circle.badge.plus")
-                        .resizable()
-                        .frame(width: 100, height: 100)
-                        .foregroundColor(.gray)
-                }
-            }
-            .padding()
-            .onChange(of: selectedItem) { newItem in
-                Task {
-                    if let data = try? await newItem?.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: data) {
-                        profileImage = uiImage
+                    if isLoading {
+                        ProgressView()
+                    }
+
+                    if let errorMessage = errorMessage {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .font(Font.custom("OpenSans", size: 14))
+                            .padding(.top)
                     }
                 }
+                .padding()
             }
-
-            Button("Save Profile") {
-                saveUserProfile()
+            .background(Color(.systemBackground).ignoresSafeArea())
+            .navigationBarTitle("Profile Setup", displayMode: .inline)
+            .sheet(isPresented: $showImagePicker) {
+                ImagePicker(image: $profileImage, showCropView: $showCropView)
             }
-            .frame(width: 200, height: 50)
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(10)
-            .padding()
-
-            if let errorMessage = errorMessage {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .padding()
-            }
-
-            if isLoading {
-                ProgressView()
+            .sheet(isPresented: $showCropView) {
+                if let profileImage = profileImage {
+                    CropView(image: profileImage, croppedImage: $croppedImage)
+                }
             }
         }
-        .padding()
+    }
+
+    private var formFields: some View {
+        Group {
+            TextField("Full Name", text: $fullName)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal)
+
+            TextField("Bio (Max 40 characters)", text: $bio)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal)
+                .onChange(of: bio) { newValue in
+                    bio = String(newValue.prefix(40))
+                }
+
+            TextField("Instagram Handle", text: $instagramHandle)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal)
+                .onChange(of: instagramHandle) { newValue in
+                    instagramHandle = String(newValue.prefix(36))
+                }
+
+            Toggle("Private Profile", isOn: $isPrivate)
+                .padding(.horizontal)
+        }
+    }
+
+    private var profilePictureSection: some View {
+        VStack {
+            if let croppedImage = croppedImage {
+                Image(uiImage: croppedImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 120, height: 120)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.gray, lineWidth: 2))
+                    .padding()
+            } else {
+                Circle()
+                    .fill(Color.gray)
+                    .frame(width: 120, height: 120)
+                    .overlay(Text("Tap to select image").foregroundColor(.white))
+                    .onTapGesture {
+                        showImagePicker = true
+                    }
+            }
+        }
+    }
+
+    private var saveButton: some View {
+        Button(action: saveUserProfile) {
+            Text("Save Profile")
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .font(Font.custom("BebasNeue-Regular", size: 18))
+                .cornerRadius(10)
+                .padding(.horizontal)
+        }
+        .disabled(isLoading || croppedImage == nil || fullName.isEmpty)
     }
 
     private func saveUserProfile() {
-        guard let uid = Auth.auth().currentUser?.uid, !username.isEmpty else {
-            errorMessage = "Please enter a valid username."
+        guard let uid = Auth.auth().currentUser?.uid, let croppedImage = croppedImage else {
+            errorMessage = "Please complete all required fields."
             return
         }
-        
+
         isLoading = true
-        var profilePictureURL = ""
-
-        if let profileImage = profileImage {
-            uploadProfileImage(image: profileImage) { url in
-                profilePictureURL = url ?? ""
-                saveData(uid: uid, profilePictureURL: profilePictureURL)
-            }
-        } else {
-            saveData(uid: uid, profilePictureURL: profilePictureURL)
-        }
-    }
-
-    private func saveData(uid: String, profilePictureURL: String) {
-        let userData: [String: Any] = [
-            "uid": uid,
-            "username": username,
-            "bio": bio,
-            "profilePictureURL": profilePictureURL,
-            "isPrivate": isPrivate
-        ]
-
-        Firestore.firestore().collection("users").document(uid).setData(userData) { error in
-            DispatchQueue.main.async {
+        uploadProfileImage(image: croppedImage) { url in
+            guard let profilePictureURL = url else {
+                errorMessage = "Failed to upload profile picture."
                 isLoading = false
-                if let error = error {
-                    errorMessage = "Error saving profile: \(error.localizedDescription)"
-                } else {
-                    authViewModel.isAuthenticated = true
+                return
+            }
+
+            let userData: [String: Any] = [
+                "uid": uid,
+                "fullName": fullName,
+                "bio": bio,
+                "instagramHandle": instagramHandle,
+                "profilePictureURL": profilePictureURL,
+                "isPrivate": isPrivate
+            ]
+
+            Firestore.firestore().collection("users").document(uid).setData(userData) { error in
+                DispatchQueue.main.async {
+                    isLoading = false
+                    if let error = error {
+                        errorMessage = "Error saving profile: \(error.localizedDescription)"
+                    } else {
+                        authViewModel.isAuthenticated = true
+                    }
                 }
             }
         }
@@ -127,14 +160,14 @@ struct ProfileSetupView: View {
             return
         }
 
-        let storageRef = Storage.storage().reference().child("profilePictures/\(UUID().uuidString).jpg")
+        let storageRef = Storage.storage().reference().child("profile_pictures/\(UUID().uuidString).jpg")
         storageRef.putData(imageData, metadata: nil) { _, error in
-            if error == nil {
+            if let error = error {
+                completion(nil)
+            } else {
                 storageRef.downloadURL { url, _ in
                     completion(url?.absoluteString)
                 }
-            } else {
-                completion(nil)
             }
         }
     }

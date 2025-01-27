@@ -21,7 +21,7 @@ struct LoggedInView: View {
                 .tag(1)
 
             // Capture
-            CameraCaptureView(capturedImage: $capturedImage) // Pass the binding here
+            CameraCaptureView(capturedImage: $capturedImage)
                 .tabItem {
                     Image(systemName: "camera.fill")
                 }
@@ -35,11 +35,13 @@ struct LoggedInView: View {
                 .tag(3)
 
             // Profile
-            UserProfileView()
-                .tabItem {
-                    Image(systemName: "person.circle.fill")
-                }
-                .tag(4)
+            NavigationView { // Add NavigationView here
+                UserProfileView()
+            }
+            .tabItem {
+                Image(systemName: "person.circle.fill")
+            }
+            .tag(4)
         }
         .accentColor(.black)
     }

@@ -1,5 +1,4 @@
 import SwiftUI
-import FirebaseAuth
 
 struct SignUpView: View {
     @State private var username = ""
@@ -7,63 +6,60 @@ struct SignUpView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var errorMessage: String?
-    @State private var navigateToProfileSetup = false
     @EnvironmentObject var authViewModel: AuthViewModel
 
     var body: some View {
-        VStack {
-            Text("Sign Up")
-                .font(.largeTitle)
-                .padding()
+        VStack(spacing: 16) {
+            Text("Create an Account")
+                .font(Font.custom("BebasNeue-Regular", size: 24))
+                .padding(.top, 40)
 
             TextField("Username", text: $username)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.none)
-                .padding()
+                .padding(.horizontal)
 
             TextField("Email", text: $email)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .keyboardType(.emailAddress)
                 .autocorrectionDisabled(true)
-
+                .padding(.horizontal)
 
             SecureField("Password", text: $password)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding()
+                .padding(.horizontal)
 
             SecureField("Confirm Password", text: $confirmPassword)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding()
+                .padding(.horizontal)
 
             Button("Sign Up") {
                 guard password == confirmPassword else {
-                    errorMessage = "Passwords do not match"
+                    errorMessage = "Passwords do not match."
                     return
                 }
 
                 authViewModel.signUp(username: username, email: email, password: password) { error in
                     if let error = error {
                         errorMessage = error
-                    } else {
-                        navigateToProfileSetup = true
                     }
                 }
             }
-            .frame(width: 200, height: 50)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
             .background(Color.blue)
             .foregroundColor(.white)
+            .font(Font.custom("BebasNeue-Regular", size: 18))
             .cornerRadius(10)
-            .padding()
+            .padding(.horizontal)
 
-            if let error = errorMessage {
-                Text(error)
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
                     .foregroundColor(.red)
-                    .padding()
+                    .font(Font.custom("OpenSans", size: 14))
+                    .padding(.top)
             }
         }
-        .padding()
-        .fullScreenCover(isPresented: $navigateToProfileSetup) {
-            ProfileSetupView().environmentObject(authViewModel)
-        }
+        .background(Color(.systemBackground).ignoresSafeArea())
     }
 }

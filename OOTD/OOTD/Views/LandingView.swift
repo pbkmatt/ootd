@@ -5,32 +5,39 @@ struct LandingView: View {
 
     var body: some View {
         NavigationView {
-            VStack {
+            VStack(spacing: 20) {
                 Text("Welcome to OOTD")
-                    .font(.largeTitle)
-                    .bold()
-                    .padding()
+                    .font(Font.custom("BebasNeue-Regular", size: 32))
+                    .padding(.top, 40)
 
                 NavigationLink(destination: SignUpView().environmentObject(authViewModel)) {
                     Text("Sign Up")
-                        .frame(width: 200, height: 50)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
                         .background(Color.blue)
                         .foregroundColor(.white)
+                        .font(Font.custom("BebasNeue-Regular", size: 18))
                         .cornerRadius(10)
+                        .padding(.horizontal, 40)
                 }
-                .padding()
 
                 NavigationLink(destination: LoginView().environmentObject(authViewModel)) {
                     Text("Log In")
-                        .frame(width: 200, height: 50)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
                         .background(Color.green)
                         .foregroundColor(.white)
+                        .font(Font.custom("BebasNeue-Regular", size: 18))
                         .cornerRadius(10)
+                        .padding(.horizontal, 40)
                 }
-                .padding()
             }
+            .background(Color(.systemBackground).ignoresSafeArea())
             .fullScreenCover(isPresented: $authViewModel.isAuthenticated) {
                 LoggedInView().environmentObject(authViewModel)
+            }
+            .fullScreenCover(isPresented: $authViewModel.needsProfileSetup) {
+                ProfileSetupView().environmentObject(authViewModel)
             }
         }
     }
