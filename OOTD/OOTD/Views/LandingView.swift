@@ -34,10 +34,11 @@ struct LandingView: View {
             }
             .background(Color(.systemBackground).ignoresSafeArea())
             .fullScreenCover(isPresented: $authViewModel.isAuthenticated) {
-                LoggedInView().environmentObject(authViewModel)
-            }
-            .fullScreenCover(isPresented: $authViewModel.needsProfileSetup) {
-                ProfileSetupView().environmentObject(authViewModel)
+                if authViewModel.needsProfileSetup {
+                    ProfileSetupView().environmentObject(authViewModel)
+                } else {
+                    LoggedInView().environmentObject(authViewModel)
+                }
             }
         }
     }

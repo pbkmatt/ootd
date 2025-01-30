@@ -1,11 +1,3 @@
-//
-//  PostView.swift
-//  OOTD
-//
-//  Created by Matt Imhof on 1/21/25.
-//
-
-
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
@@ -31,6 +23,7 @@ struct PostView: View {
             }
 
             HStack {
+                // Favorite Button
                 Button(action: {
                     toggleFavorite()
                 }) {
@@ -39,7 +32,8 @@ struct PostView: View {
                     Text("\(favoriteCount)")
                         .font(.subheadline)
                 }
-                
+
+                // Comments Button
                 Button(action: {
                     // Open comments section
                 }) {
@@ -48,6 +42,7 @@ struct PostView: View {
                         .font(.subheadline)
                 }
 
+                // Tagged Items Button
                 if !post.taggedItems.isEmpty {
                     Button(action: {
                         // Open tagged items section
@@ -60,6 +55,7 @@ struct PostView: View {
 
                 Spacer()
 
+                // Share Button
                 Button(action: {
                     sharePost()
                 }) {
@@ -103,6 +99,7 @@ struct PostView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    // MARK: - Load Comments
     private func loadComments() {
         let db = Firestore.firestore()
         guard let postId = post.id else { return }
@@ -126,50 +123,65 @@ struct PostView: View {
             }
     }
 
+    // MARK: - Add Comment
     private func addComment() {
         guard !newComment.isEmpty, let uid = Auth.auth().currentUser?.uid else { return }
 
-        // Create Comment object
-        let comment = Comment(
-            id: UUID().uuidString,
-            username: authViewModel.currentUsername ?? "Anonymous",
-            text: newComment,
-            timestamp: Timestamp(date: Date()) // Convert Date to Timestamp
-        )
-
-        // Add comment to Firestore
-        Firestore.firestore()
-            .collection("posts")
-            .document(post.id ?? "")
-            .collection("comments")
-            .document(comment.id)
-            .setData(comment.toDict()) { error in
-                if let error = error {
-                    print("Error adding comment: \(error.localizedDescription)")
-                } else {
-                    self.comments.append(comment)
-                    self.newComment = "" // Clear the input field
-                }
+        // Fetch Username from Firestore
+        let db = Firestore.firestore()
+        db.collection("users").document(uid).getDocument { document, error in
+            if let error = error {
+                print("Error fetching username: \(error.localizedDescription)")
+                return
             }
+
+            guard let data = document?.data(), let username = data["username"] as? String else {
+                print("Username not found")
+                return
+            }
+
+            // Create Comment object
+            let comment = Comment(
+                id: UUID().uuidString,
+                username: username,
+                text: newComment,
+                timestamp: Timestamp(date: Date())
+            )
+
+            // Add comment to Firestore
+            db.collection("posts")
+                .document(post.id ?? "")
+                .collection("comments")
+                .document(comment.id)
+                .setData(comment.toDict()) { error in
+                    if let error = error {
+                        print("Error adding comment: \(error.localizedDescription)")
+                    } else {
+                        self.comments.append(comment)
+                        self.newComment = "" // Clear the input field
+                    }
+                }
+        }
     }
 
-
+    // MARK: - Toggle Favorite
     private func toggleFavorite() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
 
         let postRef = Firestore.firestore().collection("posts").document(post.id ?? "")
         
         if isFavorited {
-            postRef.updateData(["favorites": FieldValue.increment(Int64(-1))])
+            postRef.updateData(["favoritesCount": FieldValue.increment(Int64(-1))])
             postRef.collection("favorites").document(uid).delete()
         } else {
-            postRef.updateData(["favorites": FieldValue.increment(Int64(1))])
+            postRef.updateData(["favoritesCount": FieldValue.increment(Int64(1))])
             postRef.collection("favorites").document(uid).setData(["favoritedAt": Timestamp()])
         }
         
         isFavorited.toggle()
     }
 
+    // MARK: - Check Favorite Status
     private func checkFavoriteStatus() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
 
@@ -182,12 +194,10 @@ struct PostView: View {
             }
     }
 
+    // MARK: - Share Post
     private func sharePost() {
         let urlString = "https://ootdapp.com/post/\(post.id ?? "")"
         let activityVC = UIActivityViewController(activityItems: [urlString], applicationActivities: nil)
         UIApplication.shared.windows.first?.rootViewController?.present(activityVC, animated: true)
     }
 }
-
-// Models
-

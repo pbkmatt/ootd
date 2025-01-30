@@ -13,8 +13,9 @@ struct UserProfileView: View {
     @State private var followersCount: Int = 0
     @State private var followingCount: Int = 0
     @State private var isLoading: Bool = true
+    @State private var errorMessage: String?
 
-    @Environment(\.presentationMode) var presentationMode // To handle navigation back to login
+    @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
         VStack(spacing: 0) {
@@ -195,7 +196,7 @@ struct UserProfileView: View {
         Firestore.firestore().collection("users").document(uid).getDocument { document, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    print("❌ Error fetching user profile: \(error.localizedDescription)")
+                    self.errorMessage = "❌ Error fetching user profile: \(error.localizedDescription)"
                 } else if let document = document, let data = document.data() {
                     username = data["username"] as? String ?? "No Username"
                     fullName = data["fullName"] as? String ?? "No Full Name"
@@ -204,37 +205,26 @@ struct UserProfileView: View {
                     followersCount = data["followersCount"] as? Int ?? 0
                     followingCount = data["followingCount"] as? Int ?? 0
                     instagramHandle = data["instagramHandle"] as? String ?? ""
-                    
-                    print("✅ Fetched Profile Picture URL: \(profilePictureURL)") // Debug line
                 }
-                checkLoadingState()
+                isLoading = false
             }
         }
     }
 
-
     // MARK: - Fetch User Posts
     private func fetchUserPosts() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-        Firestore.firestore().collection("users").document(uid).collection("posts")
+        Firestore.firestore().collection("posts")
+            .whereField("uid", isEqualTo: uid)
             .order(by: "timestamp", descending: true)
             .getDocuments { snapshot, error in
                 DispatchQueue.main.async {
-                    if let error = error {
-                        print("Error fetching user posts: \(error.localizedDescription)")
-                    } else if let snapshot = snapshot {
-                        posts = snapshot.documents.compactMap { doc -> OOTDPost? in
-                            try? doc.data(as: OOTDPost.self)
-                        }
+                    if let snapshot = snapshot {
+                        posts = snapshot.documents.compactMap { try? $0.data(as: OOTDPost.self) }
                         todaysOOTD = posts.first(where: { Calendar.current.isDateInToday($0.timestamp.dateValue()) })
                     }
-                    checkLoadingState()
+                    isLoading = false
                 }
             }
-    }
-
-    // MARK: - Check Loading State
-    private func checkLoadingState() {
-        isLoading = false // End loading regardless of post or profile state
     }
 }
