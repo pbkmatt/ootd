@@ -2,6 +2,32 @@
 
 Concept: iOS app that merges the spontaneity of BeReal, the inspiration of Pinterest, and the shopping functionality of LTK. 
 
+FIREBASE:
+users>
+[uid]{
+username
+createdAt
+email
+phone
+followersCount
+followingCount
+fullName
+instagramHandle
+isPrivateProfile
+profilePictureURL}>
+posts>
+[postid]{
+caption
+commentsCount
+favoritesCount
+imageURL
+taggedItems
+timestamp
+uid
+visibility}>
+favorites
+comments
+
 User ability:
 - Share their Outfit of the Day (OOTD) via a live photo.
 - Tag and share links to the items they’re wearing.
