@@ -1,11 +1,3 @@
-//
-//  UserProfileDetailView.swift
-//  OOTD
-//
-//  Created by Matt Imhof on 1/22/25.
-//
-
-
 import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
@@ -34,7 +26,13 @@ struct UserProfileDetailView: View {
                 }
 
                 // User's Posts
-                PostGrid(posts: posts)
+                if posts.isEmpty {
+                    Text("No posts yet")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                } else {
+                    PostGrid(posts: posts)
+                }
             }
             .padding()
         }
@@ -48,8 +46,11 @@ struct UserProfileDetailView: View {
 
     // MARK: - Fetch User Posts
     private func fetchUserPosts() {
+        guard let userId = user.id else { return }
         let db = Firestore.firestore()
-        db.collection("users").document(user.id).collection("posts")
+        
+        db.collection("posts")
+            .whereField("userID", isEqualTo: userId) // Query all posts by user
             .order(by: "timestamp", descending: true)
             .getDocuments { snapshot, error in
                 if let error = error {
@@ -69,45 +70,43 @@ struct UserProfileDetailView: View {
 
     // MARK: - Check If Following
     private func checkIfFollowing() {
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        FollowingSystemEngine.shared.isFollowing(currentUserId: currentUserId, targetUserId: user.id) { result in
-            switch result {
-            case .success(let followingStatus):
-                DispatchQueue.main.async {
-                    self.isFollowing = followingStatus
-                }
-            case .failure(let error):
-                print("Error checking follow status: \(error.localizedDescription)")
+        guard let currentUserId = Auth.auth().currentUser?.uid, let targetUserId = user.id else { return }
+        FollowingSystemEngine.shared.isFollowing(currentUserId: currentUserId, targetUserId: targetUserId) { result in
+            DispatchQueue.main.async {
+                self.isFollowing = (try? result.get()) ?? false
             }
         }
     }
 
     // MARK: - Follow User
+    // MARK: - Follow User
     private func followUser() {
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        FollowingSystemEngine.shared.followUser(currentUserId: currentUserId, targetUserId: user.id) { result in
-            switch result {
-            case .success:
-                DispatchQueue.main.async {
-                    self.isFollowing = true
+        guard let currentUserId = Auth.auth().currentUser?.uid, let targetUserId = user.id else { return }
+
+        FollowingSystemEngine.shared.followUser(currentUserId: currentUserId, targetUserId: targetUserId) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self.isFollowing = true // ✅ Only update if successful
+                case .failure(let error):
+                    print("Error following user: \(error.localizedDescription)")
                 }
-            case .failure(let error):
-                print("Error following user: \(error.localizedDescription)")
             }
         }
     }
 
     // MARK: - Unfollow User
     private func unfollowUser() {
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        FollowingSystemEngine.shared.unfollowUser(currentUserId: currentUserId, targetUserId: user.id) { result in
-            switch result {
-            case .success:
-                DispatchQueue.main.async {
-                    self.isFollowing = false
+        guard let currentUserId = Auth.auth().currentUser?.uid, let targetUserId = user.id else { return }
+
+        FollowingSystemEngine.shared.unfollowUser(currentUserId: currentUserId, targetUserId: targetUserId) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self.isFollowing = false // ✅ Only update if successful
+                case .failure(let error):
+                    print("Error unfollowing user: \(error.localizedDescription)")
                 }
-            case .failure(let error):
-                print("Error unfollowing user: \(error.localizedDescription)")
             }
         }
     }
@@ -119,7 +118,7 @@ struct UserProfileDetailView: View {
                 .font(Font.custom("BebasNeue-Regular", size: 18))
 
             NavigationLink(destination: PostDetailView(post: post)) {
-                AsyncImage(url: URL(string: post.imageURL ?? "")) { image in
+                AsyncImage(url: URL(string: post.imageURL)) { image in
                     image.resizable()
                         .scaledToFit()
                         .cornerRadius(10)
@@ -142,33 +141,39 @@ struct ProfileHeader: View {
     var body: some View {
         VStack(spacing: 16) {
             // Profile Picture
-            if let url = URL(string: user.profilePictureURL), !user.profilePictureURL.isEmpty {
-                AsyncImage(url: url) { image in
-                    image.resizable()
-                        .scaledToFill()
-                        .frame(width: 120, height: 120)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.gray.opacity(0.5), lineWidth: 2))
-                } placeholder: {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 120, height: 120)
-                }
-            } else {
+            AsyncImage(url: URL(string: user.profilePictureURL)) { image in
+                image.resizable()
+                    .scaledToFill()
+                    .frame(width: 120, height: 120)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.gray.opacity(0.5), lineWidth: 2))
+            } placeholder: {
                 Circle()
                     .fill(Color.gray.opacity(0.3))
                     .frame(width: 120, height: 120)
             }
             
-            // Username and Bio
-            Text(user.username)
-                .font(Font.custom("BebasNeue-Regular", size: 20))
-            if !user.bio.isEmpty {
-                Text(user.bio)
-                    .font(Font.custom("OpenSans", size: 14))
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16)
+            // Username, Instagram Handle, and Bio
+            VStack(spacing: 4) {
+                Text(user.username)
+                    .font(Font.custom("BebasNeue-Regular", size: 20))
+                
+                if !user.instagramHandle.isEmpty {
+                    Text("@\(user.instagramHandle)")
+                        .font(Font.custom("OpenSans", size: 14))
+                        .foregroundColor(.blue)
+                        .onTapGesture {
+                            openInstagram(username: user.instagramHandle)
+                        }
+                }
+                
+                if !user.bio.isEmpty {
+                    Text(user.bio)
+                        .font(Font.custom("OpenSans", size: 14))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                }
             }
             
             // Follow/Unfollow Button
@@ -188,3 +193,14 @@ struct ProfileHeader: View {
     }
 }
 
+// MARK: - Open Instagram Profile
+private func openInstagram(username: String) {
+    let appURL = URL(string: "instagram://user?username=\(username)")!
+    let webURL = URL(string: "https://www.instagram.com/\(username)/")!
+    
+    if UIApplication.shared.canOpenURL(appURL) {
+        UIApplication.shared.open(appURL)
+    } else {
+        UIApplication.shared.open(webURL)
+    }
+}

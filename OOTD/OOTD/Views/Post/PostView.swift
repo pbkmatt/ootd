@@ -7,12 +7,17 @@ struct PostView: View {
     @State private var comments: [Comment] = []
     @State private var newComment = ""
     @State private var isFavorited = false
-    @State private var favoriteCount = 0
+    @State private var favoriteCount: Int
     @EnvironmentObject var authViewModel: AuthViewModel
 
+    init(post: OOTDPost) {
+        self.post = post
+        _favoriteCount = State(initialValue: post.favoritesCount)
+    }
+
     var body: some View {
-        VStack {
-            // Display Post Image
+        VStack(alignment: .leading) {
+            // Post Image
             AsyncImage(url: URL(string: post.imageURL)) { image in
                 image.resizable()
                     .scaledToFit()
@@ -22,74 +27,117 @@ struct PostView: View {
                 ProgressView()
             }
 
-            HStack {
+            // Action Buttons
+            HStack(spacing: 20) {
                 // Favorite Button
-                Button(action: {
-                    toggleFavorite()
-                }) {
+                Button(action: { toggleFavorite() }) {
                     Image(systemName: isFavorited ? "star.fill" : "star")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
                         .foregroundColor(isFavorited ? .yellow : .gray)
-                    Text("\(favoriteCount)")
-                        .font(.subheadline)
                 }
+                Text("\(favoriteCount)")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
 
-                // Comments Button
-                Button(action: {
-                    // Open comments section
-                }) {
-                    Image(systemName: "message")
-                    Text("\(comments.count)")
-                        .font(.subheadline)
+                // Comment Button
+                Button(action: {}) {
+                    Image(systemName: "bubble.right")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                        .foregroundColor(.gray)
                 }
+                Text("\(comments.count)")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
 
-                // Tagged Items Button
+                // Shopping Bag Button (Tagged Items)
                 if !post.taggedItems.isEmpty {
-                    Button(action: {
-                        // Open tagged items section
-                    }) {
-                        Image(systemName: "bag.fill")
-                        Text("\(post.taggedItems.count)")
-                            .font(.subheadline)
+                    Button(action: { showTaggedItems() }) {
+                        Image(systemName: "bag")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 22, height: 22)
+                            .foregroundColor(.gray)
                     }
+                }
+
+                // Add to Board Button (Placeholder)
+                Button(action: {}) {
+                    Image(systemName: "plus")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                        .foregroundColor(.gray)
                 }
 
                 Spacer()
-
-                // Share Button
-                Button(action: {
-                    sharePost()
-                }) {
-                    Image(systemName: "square.and.arrow.up")
-                }
             }
-            .padding()
+            .padding(.horizontal, 15)
+            .padding(.top, 5)
+
+            // Caption
+            if !post.caption.isEmpty {
+                Text(post.caption)
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 15)
+            }
 
             // Comments Section
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text("Comments")
                     .font(.headline)
+                    .padding(.bottom, 5)
+
                 if comments.isEmpty {
-                    Text("No comments yet.")
+                    Text("No comments yet. Be the first to comment!")
                         .foregroundColor(.gray)
+                        .font(.subheadline)
                 } else {
                     ForEach(comments) { comment in
-                        HStack {
-                            Text(comment.username).bold()
-                            Text(comment.text)
+                        HStack(spacing: 10) {
+                            // Profile Picture (Placeholder for now)
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(width: 30, height: 30)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                // Username & Comment Text
+                                HStack {
+                                    Text(comment.username)
+                                        .bold()
+                                        .onTapGesture {
+                                            navigateToProfile(username: comment.username)
+                                        }
+                                    Spacer()
+                                }
+                                Text(comment.text)
+                                    .font(.subheadline)
+                                    .foregroundColor(.primary)
+                            }
                         }
+                        .padding(.vertical, 5)
                     }
                 }
 
+                // Add Comment Input
                 HStack {
                     TextField("Add a comment...", text: $newComment)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
+
                     Button("Post") {
                         addComment()
                     }
+                    .padding(.horizontal, 8)
+                    .disabled(newComment.isEmpty)
                 }
                 .padding(.top, 8)
             }
-            .padding()
+            .padding(.horizontal, 15)
+            .padding(.bottom, 10)
         }
         .onAppear {
             loadComments()
@@ -104,21 +152,17 @@ struct PostView: View {
         let db = Firestore.firestore()
         guard let postId = post.id else { return }
 
-        db.collection("posts")
-            .document(postId)
-            .collection("comments")
+        db.collection("posts").document(postId).collection("comments")
             .order(by: "timestamp", descending: true)
-            .getDocuments { snapshot, error in
+            .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("Error loading comments: \(error.localizedDescription)")
                     return
                 }
-
                 if let snapshot = snapshot {
                     self.comments = snapshot.documents.compactMap { doc -> Comment? in
                         try? doc.data(as: Comment.self)
                     }
-                    print("Loaded \(self.comments.count) comments.")
                 }
             }
     }
@@ -126,56 +170,58 @@ struct PostView: View {
     // MARK: - Add Comment
     private func addComment() {
         guard !newComment.isEmpty, let uid = Auth.auth().currentUser?.uid else { return }
-
-        // Fetch Username from Firestore
         let db = Firestore.firestore()
+
+        // Fetch User Data (username & profileImage)
         db.collection("users").document(uid).getDocument { document, error in
             if let error = error {
-                print("Error fetching username: \(error.localizedDescription)")
+                print("Error fetching user data: \(error.localizedDescription)")
                 return
             }
 
-            guard let data = document?.data(), let username = data["username"] as? String else {
-                print("Username not found")
-                return
-            }
+            guard let data = document?.data(),
+                  let username = data["username"] as? String,
+                  let profileImage = data["profileImage"] as? String else { return }
 
-            // Create Comment object
+            // Create Comment object with all required fields
             let comment = Comment(
                 id: UUID().uuidString,
+                userId: uid,
                 username: username,
+                profileImage: profileImage,
                 text: newComment,
                 timestamp: Timestamp(date: Date())
             )
 
-            // Add comment to Firestore
-            db.collection("posts")
-                .document(post.id ?? "")
+            // Store comment in Firestore
+            db.collection("posts").document(post.id ?? "")
                 .collection("comments")
                 .document(comment.id)
                 .setData(comment.toDict()) { error in
                     if let error = error {
                         print("Error adding comment: \(error.localizedDescription)")
                     } else {
-                        self.comments.append(comment)
-                        self.newComment = "" // Clear the input field
+                        self.comments.append(comment) // Update UI
+                        self.newComment = "" // Clear input field
                     }
                 }
         }
     }
 
+
     // MARK: - Toggle Favorite
     private func toggleFavorite() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
 
-        let postRef = Firestore.firestore().collection("posts").document(post.id ?? "")
-        
+        let db = Firestore.firestore()
+        let favoriteRef = db.collection("users").document(uid).collection("favorites").document(post.id ?? "")
+
         if isFavorited {
-            postRef.updateData(["favoritesCount": FieldValue.increment(Int64(-1))])
-            postRef.collection("favorites").document(uid).delete()
+            favoriteRef.delete()
+            favoriteCount -= 1
         } else {
-            postRef.updateData(["favoritesCount": FieldValue.increment(Int64(1))])
-            postRef.collection("favorites").document(uid).setData(["favoritedAt": Timestamp()])
+            favoriteRef.setData(["favoritedAt": Timestamp()])
+            favoriteCount += 1
         }
         
         isFavorited.toggle()
@@ -185,19 +231,20 @@ struct PostView: View {
     private func checkFavoriteStatus() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
 
-        Firestore.firestore().collection("posts").document(post.id ?? "")
-            .collection("favorites").document(uid)
+        let db = Firestore.firestore()
+        db.collection("users").document(uid).collection("favorites").document(post.id ?? "")
             .getDocument { document, _ in
-                if document?.exists == true {
-                    self.isFavorited = true
-                }
+                self.isFavorited = document?.exists == true
             }
     }
 
-    // MARK: - Share Post
-    private func sharePost() {
-        let urlString = "https://ootdapp.com/post/\(post.id ?? "")"
-        let activityVC = UIActivityViewController(activityItems: [urlString], applicationActivities: nil)
-        UIApplication.shared.windows.first?.rootViewController?.present(activityVC, animated: true)
+    // MARK: - Navigate to User Profile
+    private func navigateToProfile(username: String) {
+        // Navigation logic to UserProfileDetailView (placeholder)
+    }
+
+    // MARK: - Show Tagged Items (Placeholder)
+    private func showTaggedItems() {
+        // Functionality to display tagged items (to be implemented)
     }
 }
