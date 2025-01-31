@@ -11,53 +11,12 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Tab Selector
-            HStack {
-                Button(action: {
-                    selectedTab = 0
-                    posts.removeAll()
-                    lastDocument = nil
-                    fetchFollowingPosts()
-                }) {
-                    Text("FOLLOWING")
-                        .font(Font.custom("BebasNeue-Regular", size: 16))
-                        .foregroundColor(selectedTab == 0 ? .black : .gray)
-                        .frame(maxWidth: .infinity)
-                }
-
-                Button(action: {
-                    selectedTab = 1
-                    posts.removeAll()
-                    lastDocument = nil
-                    fetchTrendingPosts()
-                }) {
-                    Text("TRENDING")
-                        .font(Font.custom("BebasNeue-Regular", size: 16))
-                        .foregroundColor(selectedTab == 1 ? .black : .gray)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .padding()
-            .background(Color(.systemBackground))
+            TabSelector(selectedTab: $selectedTab, posts: $posts, lastDocument: $lastDocument, fetchFollowingPosts: fetchFollowingPosts, fetchTrendingPosts: fetchTrendingPosts)
 
             Divider()
 
             // Posts Section
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    ForEach(posts) { post in
-                        PostCard(post: post)
-                            .onAppear {
-                                if post == posts.last {
-                                    selectedTab == 0 ? fetchFollowingPosts() : fetchTrendingPosts()
-                                }
-                            }
-                    }
-                }
-                .padding()
-            }
-            .onAppear {
-                selectedTab == 0 ? fetchFollowingPosts() : fetchTrendingPosts()
-            }
+            PostsSection(posts: $posts, selectedTab: $selectedTab, lastDocument: $lastDocument, isLoading: $isLoading, fetchFollowingPosts: fetchFollowingPosts, fetchTrendingPosts: fetchTrendingPosts)
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -65,6 +24,9 @@ struct HomeView: View {
                 Text("OOTD")
                     .font(Font.custom("BebasNeue-Regular", size: 20))
             }
+        }
+        .onAppear {
+            selectedTab == 0 ? fetchFollowingPosts() : fetchTrendingPosts()
         }
     }
 
@@ -142,7 +104,72 @@ struct HomeView: View {
     }
 }
 
-// MARK: - PostCard Component
+// MARK: - Tab Selector Component
+struct TabSelector: View {
+    @Binding var selectedTab: Int
+    @Binding var posts: [OOTDPost]
+    @Binding var lastDocument: DocumentSnapshot?
+    var fetchFollowingPosts: () -> Void
+    var fetchTrendingPosts: () -> Void
+
+    var body: some View {
+        HStack {
+            Button(action: {
+                selectedTab = 0
+                posts.removeAll()
+                lastDocument = nil
+                fetchFollowingPosts()
+            }) {
+                Text("FOLLOWING")
+                    .font(Font.custom("BebasNeue-Regular", size: 16))
+                    .foregroundColor(selectedTab == 0 ? .black : .gray)
+                    .frame(maxWidth: .infinity)
+            }
+
+            Button(action: {
+                selectedTab = 1
+                posts.removeAll()
+                lastDocument = nil
+                fetchTrendingPosts()
+            }) {
+                Text("TRENDING")
+                    .font(Font.custom("BebasNeue-Regular", size: 16))
+                    .foregroundColor(selectedTab == 1 ? .black : .gray)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+    }
+}
+
+// MARK: - Posts Section Component
+struct PostsSection: View {
+    @Binding var posts: [OOTDPost]
+    @Binding var selectedTab: Int
+    @Binding var lastDocument: DocumentSnapshot?
+    @Binding var isLoading: Bool
+    var fetchFollowingPosts: () -> Void
+    var fetchTrendingPosts: () -> Void
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 20) {
+                ForEach(posts) { post in
+                    PostCard(post: post)
+                        .onAppear {
+                            if post.id == posts.last?.id {
+                                selectedTab == 0 ? fetchFollowingPosts() : fetchTrendingPosts()
+                            }
+                        }
+                }
+            }
+            .padding()
+        }
+    }
+}
+
+// MARK: - PostCard Component (Unchanged)
 struct PostCard: View {
     let post: OOTDPost
 
