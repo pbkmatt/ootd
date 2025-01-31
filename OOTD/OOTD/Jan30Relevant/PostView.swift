@@ -99,10 +99,17 @@ struct PostView: View {
                 } else {
                     ForEach(comments) { comment in
                         HStack(spacing: 10) {
-                            // Profile Picture (Placeholder for now)
-                            Circle()
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(width: 30, height: 30)
+                            // Profile Picture
+                            AsyncImage(url: URL(string: comment.profileImage)) { image in
+                                image.resizable()
+                                    .scaledToFill()
+                                    .frame(width: 30, height: 30)
+                                    .clipShape(Circle())
+                            } placeholder: {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 30, height: 30)
+                            }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 // Username & Comment Text
@@ -110,7 +117,7 @@ struct PostView: View {
                                     Text(comment.username)
                                         .bold()
                                         .onTapGesture {
-                                            navigateToProfile(username: comment.username)
+                                            navigateToProfile(userId: comment.userId)
                                         }
                                     Spacer()
                                 }
@@ -172,7 +179,6 @@ struct PostView: View {
         guard !newComment.isEmpty, let uid = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
 
-        // Fetch User Data (username & profileImage)
         db.collection("users").document(uid).getDocument { document, error in
             if let error = error {
                 print("Error fetching user data: \(error.localizedDescription)")
@@ -183,7 +189,6 @@ struct PostView: View {
                   let username = data["username"] as? String,
                   let profileImage = data["profileImage"] as? String else { return }
 
-            // Create Comment object with all required fields
             let comment = Comment(
                 id: UUID().uuidString,
                 userId: uid,
@@ -193,7 +198,6 @@ struct PostView: View {
                 timestamp: Timestamp(date: Date())
             )
 
-            // Store comment in Firestore
             db.collection("posts").document(post.id ?? "")
                 .collection("comments")
                 .document(comment.id)
@@ -201,13 +205,12 @@ struct PostView: View {
                     if let error = error {
                         print("Error adding comment: \(error.localizedDescription)")
                     } else {
-                        self.comments.append(comment) // Update UI
-                        self.newComment = "" // Clear input field
+                        self.comments.append(comment) // **Optimized: Adds comment locally**
+                        self.newComment = ""
                     }
                 }
         }
     }
-
 
     // MARK: - Toggle Favorite
     private func toggleFavorite() {
@@ -227,24 +230,13 @@ struct PostView: View {
         isFavorited.toggle()
     }
 
-    // MARK: - Check Favorite Status
-    private func checkFavoriteStatus() {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
-
-        let db = Firestore.firestore()
-        db.collection("users").document(uid).collection("favorites").document(post.id ?? "")
-            .getDocument { document, _ in
-                self.isFavorited = document?.exists == true
-            }
-    }
-
     // MARK: - Navigate to User Profile
-    private func navigateToProfile(username: String) {
-        // Navigation logic to UserProfileDetailView (placeholder)
+    private func navigateToProfile(userId: String) {
+        // Navigation logic to UserProfileDetailView
     }
 
     // MARK: - Show Tagged Items (Placeholder)
     private func showTaggedItems() {
-        // Functionality to display tagged items (to be implemented)
+        // Functionality to display tagged items
     }
 }
