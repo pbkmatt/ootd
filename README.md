@@ -1,6 +1,6 @@
 # ootd v1
 
-Concept: iOS app that merges the spontaneity of BeReal, the inspiration of Pinterest, and the shopping functionality of LTK. 
+Concept: iOS app that merges the spontaneity of BeReal, the influencer sphere of Instagram, and the authentic feed of vsco.
 
 FIREBASE:
 users>
@@ -27,6 +27,10 @@ uid
 visibility}>
 favorites
 comments
+
+STORAGE:
+ootdpost images are saved in /posts/
+profile pictures are saved in /profile_pictures/
 
 User ability:
 - Share their Outfit of the Day (OOTD) via a live photo.
