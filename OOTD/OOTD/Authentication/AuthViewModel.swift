@@ -2,11 +2,17 @@ import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
-import Firebase
+import FirebaseCore
 
 class AuthViewModel: ObservableObject {
+    // MARK: - Authentication State
     @Published var isAuthenticated: Bool = false
     @Published var needsProfileSetup: Bool = false
+    
+    // Store the entire user doc so we can access user.uid, user.username, etc.
+    @Published var currentUser: UserModel? = nil
+
+    // MARK: - Temporary Fields for Registration/Phone
     @Published var currentEmail: String = ""
     @Published var currentPhone: String = ""
     @Published var currentPassword: String = ""
@@ -23,6 +29,7 @@ class AuthViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Configure Firebase
     private func configureFirebase() {
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
@@ -33,20 +40,61 @@ class AuthViewModel: ObservableObject {
         self.checkAuthState()
     }
 
-    private func checkAuthState() {
-        Auth.auth().addStateDidChangeListener { auth, user in
-            if let user = user {
-                self.checkUserProfileCompletion(for: user.uid)
-            } else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    self.isAuthenticated = true
+    // MARK: - Listen for Auth State Changes
+    func checkAuthState() {
+        Auth.auth().addStateDidChangeListener { [weak self] auth, user in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                if let user = user {
+                    // We have a signed-in user. Let's fetch their doc to populate `currentUser`.
+                    self.fetchCurrentUserDoc(uid: user.uid)
+                } else {
+                    print("❌ No authenticated user. Redirecting to LandingView.")
+                    self.isAuthenticated = false
                     self.needsProfileSetup = false
+                    self.currentUser = nil
                 }
             }
         }
     }
 
-    // MARK: - Check Email Uniqueness Before Signup
+    // MARK: - Fetch Current User Doc
+    private func fetchCurrentUserDoc(uid: String) {
+        db.collection("users").document(uid).getDocument { document, error in
+            if let error = error {
+                print("❌ Error fetching user doc: \(error.localizedDescription)")
+                self.isAuthenticated = false
+                self.needsProfileSetup = false
+                self.currentUser = nil
+                return
+            }
+            guard let document = document, document.exists,
+                  let userModel = try? document.data(as: UserModel.self) else {
+                // doc doesn't exist or can't decode => user needs profile setup
+                print("⚠️ No user doc found or failed to decode. Possibly needs profile setup.")
+                self.isAuthenticated = false
+                self.needsProfileSetup = true
+                self.currentUser = nil
+                return
+            }
+
+            // We have a valid user doc
+            // Check if mandatory fields are set
+            if userModel.username.isEmpty || userModel.profilePictureURL.isEmpty {
+                self.isAuthenticated = false
+                self.needsProfileSetup = true
+            } else {
+                self.isAuthenticated = true
+                self.needsProfileSetup = false
+            }
+
+            // Store in self.currentUser
+            self.currentUser = userModel
+            print("✅ Successfully fetched currentUser doc: \(userModel.username)")
+        }
+    }
+
+    // MARK: - Check Email Availability Before Signup
     func checkEmailAvailability(email: String, completion: @escaping (Bool, String?) -> Void) {
         db.collection("users").whereField("email", isEqualTo: email).getDocuments { snapshot, error in
             if let error = error {
@@ -65,6 +113,7 @@ class AuthViewModel: ObservableObject {
     func createUserAfterProfileSetup(
         fullName: String,
         username: String,
+        bio: String,
         instagramHandle: String,
         profileImage: UIImage?,
         password: String,
@@ -76,22 +125,26 @@ class AuthViewModel: ObservableObject {
                 return
             }
 
-            guard let uid = result?.user.uid else {
-                completion("Error retrieving user ID.")
+            guard let authResult = result else {
+                completion("❌ Auth result is nil.")
                 return
             }
+            let firebaseUser = authResult.user
+            let uid = firebaseUser.uid
 
             self.uploadProfileImage(profileImage: profileImage, uid: uid) { imageURL in
                 let userData: [String: Any] = [
                     "fullName": fullName,
                     "username": username.lowercased(),
+                    "bio": bio,
                     "instagramHandle": instagramHandle,
                     "profilePictureURL": imageURL ?? "",
                     "email": self.currentEmail,
                     "createdAt": FieldValue.serverTimestamp(),
                     "followersCount": 0,
                     "followingCount": 0,
-                    "isPrivateProfile": false
+                    "isPrivateProfile": false,
+                    "uid": uid // ensure we store uid in the doc
                 ]
 
                 self.db.collection("users").document(uid).setData(userData) { error in
@@ -109,38 +162,6 @@ class AuthViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Check User Profile Completion
-    private func checkUserProfileCompletion(for uid: String) {
-        db.collection("users").document(uid).getDocument { document, error in
-            if let error = error {
-                print("Error checking profile completion: \(error.localizedDescription)")
-                return
-            }
-
-            if let document = document, document.exists {
-                let data = document.data()
-                let fullName = data?["fullName"] as? String ?? ""
-                let username = data?["username"] as? String ?? ""
-                let profilePictureURL = data?["profilePictureURL"] as? String ?? ""
-
-                DispatchQueue.main.async {
-                    if fullName.isEmpty || username.isEmpty || profilePictureURL.isEmpty {
-                        self.needsProfileSetup = true
-                        self.isAuthenticated = false
-                    } else {
-                        self.isAuthenticated = true
-                        self.needsProfileSetup = false
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.needsProfileSetup = true
-                    self.isAuthenticated = false
-                }
-            }
-        }
-    }
-
     // MARK: - Login with Email & Password
     func logInWithEmail(email: String, password: String, completion: @escaping (String?) -> Void) {
         Auth.auth().signIn(withEmail: email, password: password) { result, error in
@@ -148,66 +169,23 @@ class AuthViewModel: ObservableObject {
                 completion(error.localizedDescription)
                 return
             }
-
+            // If success, we'll get the user in checkAuthState's listener
+            // but let's store the email now
             DispatchQueue.main.async {
-                self.isAuthenticated = true
                 self.currentEmail = email
             }
             completion(nil)
         }
     }
 
-    // MARK: - Upload Profile Picture to Firebase Storage
-    private func uploadProfileImage(profileImage: UIImage?, uid: String, completion: @escaping (String?) -> Void) {
-        guard let profileImage = profileImage else {
-            completion(nil)
-            return
-        }
-
-        let storageRef = Storage.storage().reference().child("profile_pictures/\(uid).jpg")
-        guard let imageData = profileImage.jpegData(compressionQuality: 0.7) else {
-            completion(nil)
-            return
-        }
-
-        storageRef.putData(imageData, metadata: nil) { _, error in
-            if let error = error {
-                print("Error uploading profile picture: \(error.localizedDescription)")
-                completion(nil)
-                return
-            }
-
-            storageRef.downloadURL { url, error in
-                if let error = error {
-                    print("Error retrieving image URL: \(error.localizedDescription)")
-                    completion(nil)
-                    return
-                }
-                completion(url?.absoluteString)
-            }
-        }
+    // MARK: - Check User Profile Completion
+    // (We replaced this logic with fetchCurrentUserDoc)
+    private func checkUserProfileCompletion(for uid: String) {
+        // Not used anymore, we do it in fetchCurrentUserDoc
+        print("⚠️ checkUserProfileCompletion(for:) is not used. We'll rely on fetchCurrentUserDoc.")
     }
 
-    // MARK: - Sign Out
-    func signOut() {
-        do {
-            try Auth.auth().signOut()
-            DispatchQueue.main.async {
-                self.isAuthenticated = false
-                self.needsProfileSetup = false
-                self.currentEmail = ""
-                self.currentPhone = ""
-                self.currentPassword = ""
-                self.verificationID = nil
-                self.isVerificationSent = false
-                self.authErrorMessage = nil
-            }
-            print("✅ Successfully signed out.")
-        } catch {
-            print("❌ Error signing out: \(error.localizedDescription)")
-        }
-    }
-
+    // MARK: - Phone Verification
     func verifyCode(code: String, completion: @escaping (String?) -> Void) {
         guard let verificationID = self.verificationID else {
             completion("Verification ID is missing. Please request a new code.")
@@ -244,18 +222,18 @@ class AuthViewModel: ObservableObject {
 
                 DispatchQueue.main.async {
                     self.currentPhone = phoneNumber
-                    self.isAuthenticated = true
+                    // The auth state listener picks up the new user sign in
                 }
                 completion(nil)
             }
         }
     }
-    
-    // MARK: - Send Phone Number Verification Code
+
     func sendVerificationCode(phoneNumber: String, completion: @escaping (String?) -> Void) {
         PhoneAuthProvider.provider().verifyPhoneNumber(phoneNumber, uiDelegate: nil) { verificationID, error in
             DispatchQueue.main.async {
                 if let error = error {
+                    print("❌ Error sending verification code: \(error.localizedDescription)")
                     completion(error.localizedDescription)
                 } else {
                     self.verificationID = verificationID
@@ -266,4 +244,55 @@ class AuthViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Sign Out
+    func signOut() {
+        do {
+            try Auth.auth().signOut()
+            DispatchQueue.main.async {
+                print("✅ Successfully signed out. Redirecting to LandingView.")
+                self.isAuthenticated = false
+                self.needsProfileSetup = false
+                self.currentEmail = ""
+                self.currentPhone = ""
+                self.currentPassword = ""
+                self.verificationID = nil
+                self.isVerificationSent = false
+                self.authErrorMessage = nil
+                self.currentUser = nil
+            }
+        } catch {
+            print("❌ Error signing out: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Upload Profile Picture to Firebase Storage
+    private func uploadProfileImage(profileImage: UIImage?, uid: String, completion: @escaping (String?) -> Void) {
+        guard let profileImage = profileImage else {
+            completion(nil)
+            return
+        }
+
+        let storageRef = Storage.storage().reference().child("profile_pictures/\(uid).jpg")
+        guard let imageData = profileImage.jpegData(compressionQuality: 0.7) else {
+            completion(nil)
+            return
+        }
+
+        storageRef.putData(imageData, metadata: nil) { _, error in
+            if let error = error {
+                print("Error uploading profile picture: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            storageRef.downloadURL { url, error in
+                if let error = error {
+                    print("Error retrieving image URL: \(error.localizedDescription)")
+                    completion(nil)
+                    return
+                }
+                completion(url?.absoluteString)
+            }
+        }
+    }
 }

@@ -1,33 +1,33 @@
 import SwiftUI
+import Firebase
 import FirebaseFirestore
 import FirebaseAuth
 
 struct OtherProfileView: View {
     let user: UserModel
+
     @State private var isFollowing: Bool = false
     @State private var todaysOOTD: OOTDPost?
     @State private var pastOOTDs: [OOTDPost] = []
-    @EnvironmentObject var authViewModel: AuthViewModel
-
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                // Profile Header
-                ProfileHeader(
-                    user: user,
-                    isFollowing: $isFollowing,
-                    onFollow: followUser,
-                    onUnfollow: unfollowUser
-                )
-
-                // Today's OOTD
+                // A big header with user's profile
+                ProfileHeaderView(user: user, isFollowing: $isFollowing)
+                
+                // Display OOTDs
                 if let todaysOOTD = todaysOOTD {
-                    todaysOOTDSection(todaysOOTD)
+                    Text("Today's OOTD")
+                        .font(.headline)
+                    PostView(post: todaysOOTD)
+                        .cornerRadius(10)
                 }
-
-                // Past OOTDs
+                
                 if !pastOOTDs.isEmpty {
-                    pastOOTDsSection
+                    Text("\(user.username)'s Past OOTDs")
+                        .font(.headline)
+                    // show them in a grid
                 }
             }
             .padding()
@@ -35,218 +35,131 @@ struct OtherProfileView: View {
         .navigationTitle(user.username)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            checkIfFollowing()
+            checkFollowStatus()
             fetchUserPosts()
         }
     }
 
-    // MARK: - Check If Following
-    private func checkIfFollowing() {
-        guard let currentUserId = Auth.auth().currentUser?.uid, let targetUserId = user.id else { return }
+    private func checkFollowStatus() {
+        let currentUid = Auth.auth().currentUser?.uid
+        if currentUid == user.uid { return } // can't follow ourselves
 
-        Firestore.firestore().collection("following")
-            .document(currentUserId)
+        // e.g. /users/{user.uid}/followers/{currentUid}
+        Firestore.firestore()
             .collection("users")
-            .document(targetUserId)
-            .getDocument { document, _ in
+            .document(user.uid)
+            .collection("followers")
+            .document(currentUid ?? "")
+            .getDocument { snapshot, error in
                 DispatchQueue.main.async {
-                    isFollowing = document?.exists ?? false
+                    self.isFollowing = snapshot?.exists ?? false
                 }
             }
     }
 
-    // MARK: - Follow User
-    private func followUser() {
-        guard let currentUserId = Auth.auth().currentUser?.uid, let targetUserId = user.id else { return }
-
-        let db = Firestore.firestore()
-        
-        // Add follow relationship
-        db.collection("following")
-            .document(currentUserId)
-            .collection("users")
-            .document(targetUserId)
-            .setData(["followedAt": Timestamp()]) { error in
-                DispatchQueue.main.async {
-                    if error == nil {
-                        self.isFollowing = true
-                    } else {
-                        print("Error following user: \(error!.localizedDescription)")
-                    }
-                }
-            }
-
-        // Increment followers count for target user
-        db.collection("users").document(targetUserId).updateData([
-            "followersCount": FieldValue.increment(Int64(1))
-        ])
-
-        // Increment following count for current user
-        db.collection("users").document(currentUserId).updateData([
-            "followingCount": FieldValue.increment(Int64(1))
-        ])
-    }
-
-    // MARK: - Unfollow User
-    private func unfollowUser() {
-        guard let currentUserId = Auth.auth().currentUser?.uid, let targetUserId = user.id else { return }
-
-        let db = Firestore.firestore()
-
-        // Remove follow relationship
-        db.collection("following")
-            .document(currentUserId)
-            .collection("users")
-            .document(targetUserId)
-            .delete { error in
-                DispatchQueue.main.async {
-                    if error == nil {
-                        self.isFollowing = false
-                    } else {
-                        print("Error unfollowing user: \(error!.localizedDescription)")
-                    }
-                }
-            }
-
-        // Decrement followers count for target user
-        db.collection("users").document(targetUserId).updateData([
-            "followersCount": FieldValue.increment(Int64(-1))
-        ])
-
-        // Decrement following count for current user
-        db.collection("users").document(currentUserId).updateData([
-            "followingCount": FieldValue.increment(Int64(-1))
-        ])
-    }
-
-    // MARK: - Today's OOTD Section
-    private func todaysOOTDSection(_ post: OOTDPost) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Today's OOTD")
-                .font(Font.custom("BebasNeue-Regular", size: 20))
-
-            PostView(post: post)
-                .cornerRadius(10)
-        }
-    }
-
-    // MARK: - Past OOTDs Section
-    private var pastOOTDsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("\(user.username)'s Past OOTDs")
-                .font(Font.custom("BebasNeue-Regular", size: 20))
-                .padding(.leading, 8)
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                ForEach(pastOOTDs) { post in
-                    NavigationLink(destination: PostView(post: post)) {
-                        AsyncImage(url: URL(string: post.imageURL ?? "")) { image in
-                            image.resizable()
-                                .scaledToFill()
-                                .frame(width: UIScreen.main.bounds.width / 2 - 20, height: UIScreen.main.bounds.width / 2 - 20)
-                                .cornerRadius(10)
-                        } placeholder: {
-                            Color.gray
-                                .frame(width: UIScreen.main.bounds.width / 2 - 20, height: UIScreen.main.bounds.width / 2 - 20)
-                                .cornerRadius(10)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Fetch User Posts
     private func fetchUserPosts() {
-        guard let userId = user.id else { return }
-
         Firestore.firestore().collection("posts")
-            .whereField("uid", isEqualTo: userId)
+            .whereField("uid", isEqualTo: user.uid)
             .order(by: "timestamp", descending: true)
             .getDocuments { snapshot, error in
                 DispatchQueue.main.async {
-                    if let snapshot = snapshot {
-                        let posts = snapshot.documents.compactMap { try? $0.data(as: OOTDPost.self) }
-                        todaysOOTD = posts.first(where: { Calendar.current.isDateInToday($0.timestamp.dateValue()) })
-                        pastOOTDs = posts.filter { !Calendar.current.isDateInToday($0.timestamp.dateValue()) }
+                    guard let docs = snapshot?.documents else { return }
+                    let posts = docs.compactMap { try? $0.data(as: OOTDPost.self) }
+                    self.todaysOOTD = posts.first(where: {
+                        Calendar.current.isDateInToday($0.timestamp.dateValue())
+                    })
+                    self.pastOOTDs = posts.filter {
+                        !Calendar.current.isDateInToday($0.timestamp.dateValue())
                     }
                 }
             }
     }
 }
 
-// MARK: - ProfileHeader Component
-struct ProfileHeader: View {
+struct ProfileHeaderView: View {
     let user: UserModel
     @Binding var isFollowing: Bool
-    let onFollow: () -> Void
-    let onUnfollow: () -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Profile Picture
+        VStack(spacing: 8) {
+            // Profile Pic
             AsyncImage(url: URL(string: user.profilePictureURL)) { image in
                 image.resizable()
-                    .scaledToFill()
-                    .frame(width: 120, height: 120)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.gray.opacity(0.5), lineWidth: 2))
+                     .scaledToFill()
+                     .frame(width: 120, height: 120)
+                     .clipShape(Circle())
             } placeholder: {
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 120, height: 120)
+                Circle().fill(Color.gray.opacity(0.3))
+                       .frame(width: 120, height: 120)
             }
 
-            // Username, Instagram Handle, and Bio
-            VStack(spacing: 4) {
-                Text(user.username)
-                    .font(Font.custom("BebasNeue-Regular", size: 20))
+            // Username, Full Name
+            Text(user.username)
+                .font(.title2)
+            if !user.fullName.isEmpty {
+                Text(user.fullName)
+                    .foregroundColor(.secondary)
+            }
 
-                if !user.instagramHandle.isEmpty {
-                    Text("@\(user.instagramHandle)")
-                        .font(Font.custom("OpenSans", size: 14))
-                        .foregroundColor(.blue)
-                        .onTapGesture {
-                            openInstagram(username: user.instagramHandle)
-                        }
+            // Follow/Unfollow if not your own profile
+            let currentUid = Auth.auth().currentUser?.uid
+            if currentUid != user.uid {
+                Button(isFollowing ? "Unfollow" : "Follow") {
+                    if isFollowing {
+                        unfollowUser()
+                    } else {
+                        followUser()
+                    }
                 }
-
-                if !user.bio.isEmpty {
-                    Text(user.bio)
-                        .font(Font.custom("OpenSans", size: 14))
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 16)
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(isFollowing ? Color.red : Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
             }
-
-            // Follow/Unfollow Button
-            Button(action: {
-                isFollowing ? onUnfollow() : onFollow()
-            }) {
-                Text(isFollowing ? "Unfollow" : "Follow")
-                    .font(Font.custom("BebasNeue-Regular", size: 16))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(isFollowing ? Color.red : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-            }
-            .padding(.horizontal)
         }
+        .padding(.top)
     }
-}
 
-// MARK: - Open Instagram Profile
-private func openInstagram(username: String) {
-    let appURL = URL(string: "instagram://user?username=\(username)")!
-    let webURL = URL(string: "https://www.instagram.com/\(username)/")!
-
-    if UIApplication.shared.canOpenURL(appURL) {
-        UIApplication.shared.open(appURL)
-    } else {
-        UIApplication.shared.open(webURL)
+    private func followUser() {
+        guard let currentUid = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        db.collection("users")
+            .document(user.uid)
+            .collection("followers")
+            .document(currentUid)
+            .setData(["followedAt": Timestamp()]) { error in
+                if let error = error {
+                    print("Error following: \(error.localizedDescription)")
+                } else {
+                    isFollowing = true
+                    // increment counters
+                    db.collection("users").document(user.uid)
+                        .updateData(["followersCount": FieldValue.increment(Int64(1))])
+                    db.collection("users").document(currentUid)
+                        .updateData(["followingCount": FieldValue.increment(Int64(1))])
+                }
+            }
     }
-    
 
+    private func unfollowUser() {
+        guard let currentUid = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        db.collection("users")
+            .document(user.uid)
+            .collection("followers")
+            .document(currentUid)
+            .delete { error in
+                if let error = error {
+                    print("Error unfollowing: \(error.localizedDescription)")
+                } else {
+                    isFollowing = false
+                    // decrement counters
+                    db.collection("users").document(user.uid)
+                        .updateData(["followersCount": FieldValue.increment(Int64(-1))])
+                    db.collection("users").document(currentUid)
+                        .updateData(["followingCount": FieldValue.increment(Int64(-1))])
+                }
+            }
+    }
 }

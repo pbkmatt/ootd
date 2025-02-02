@@ -32,61 +32,9 @@ struct LoginView: View {
                 .padding(.horizontal)
 
             if isUsingPhoneAuth {
-                if isVerificationSent {
-                    // OTP Code Entry
-                    TextField("Enter Verification Code", text: $verificationCode)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .keyboardType(.numberPad)
-                        .padding(.horizontal)
-
-                    Button("Verify Code") {
-                        authViewModel.verifyCode(code: verificationCode) { error in
-                            if let error = error {
-                                errorMessage = error
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                    .padding(.horizontal)
-                } else {
-                    Button("Send Verification Code") {
-                        authViewModel.sendVerificationCode(phoneNumber: emailOrPhone) { error in
-                            if let error = error {
-                                errorMessage = error
-                            } else {
-                                isVerificationSent = true
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                    .padding(.horizontal)
-                }
+                phoneAuthSection
             } else {
-                SecureField("Password", text: $password)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-
-                Button("Log In") {
-                    authViewModel.logInWithEmail(email: emailOrPhone, password: password) { error in
-                        if let error = error {
-                            errorMessage = error
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(Color.green)
-                .foregroundColor(.white)
-                .cornerRadius(10)
-                .padding(.horizontal)
+                emailAuthSection
             }
 
             if let errorMessage = errorMessage {
@@ -98,11 +46,92 @@ struct LoginView: View {
         }
         .padding()
         .background(Color(.systemBackground).ignoresSafeArea())
+        .onAppear {
+            errorMessage = nil // Reset errors on view appear
+        }
         .fullScreenCover(isPresented: $authViewModel.isAuthenticated) {
             if authViewModel.needsProfileSetup {
                 ProfileSetupView(password: password).environmentObject(authViewModel)
             } else {
                 LoggedInView().environmentObject(authViewModel)
+            }
+        }
+    }
+
+    // MARK: - Phone Authentication Section
+    private var phoneAuthSection: some View {
+        VStack {
+            if isVerificationSent {
+                TextField("Enter Verification Code", text: $verificationCode)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .keyboardType(.numberPad)
+                    .padding(.horizontal)
+
+                Button("Verify Code") {
+                    verifyPhoneCode()
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+                .padding(.horizontal)
+            } else {
+                Button("Send Verification Code") {
+                    sendVerificationCode()
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+                .padding(.horizontal)
+            }
+        }
+    }
+
+    // MARK: - Email Authentication Section
+    private var emailAuthSection: some View {
+        VStack {
+            SecureField("Password", text: $password)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal)
+
+            Button("Log In") {
+                loginWithEmail()
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(Color.green)
+            .foregroundColor(.white)
+            .cornerRadius(10)
+            .padding(.horizontal)
+        }
+    }
+
+    // MARK: - Authentication Functions
+    private func sendVerificationCode() {
+        authViewModel.sendVerificationCode(phoneNumber: self.emailOrPhone) { error in
+            if let error = error {
+                errorMessage = error
+            } else {
+                isVerificationSent = true
+            }
+        }
+    }
+
+    private func verifyPhoneCode() {
+        authViewModel.verifyCode(code: self.verificationCode) { error in
+            if let error = error {
+                errorMessage = error
+            }
+        }
+    }
+
+    private func loginWithEmail() {
+        authViewModel.logInWithEmail(email: emailOrPhone, password: password) { error in
+            if let error = error {
+                errorMessage = error
             }
         }
     }

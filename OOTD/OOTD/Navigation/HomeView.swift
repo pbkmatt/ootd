@@ -183,7 +183,7 @@ struct PostCard: View {
                     .foregroundColor(.gray)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(post.userID) // Replace with fetched username if available
+                    Text(post.uid) // Replace with fetched username if available
                         .font(Font.custom("BebasNeue-Regular", size: 14))
                     Text(post.timestamp.dateValue(), style: .time)
                         .font(Font.custom("OpenSans", size: 12))

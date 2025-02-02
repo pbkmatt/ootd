@@ -1,7 +1,4 @@
 import SwiftUI
-import FirebaseFirestore
-import FirebaseAuth
-import FirebaseStorage
 import PhotosUI
 
 struct ProfileSetupView: View {
@@ -9,13 +6,13 @@ struct ProfileSetupView: View {
 
     @State private var fullName: String = ""
     @State private var username: String = ""
+    @State private var bio: String = "" // ✅ New bio field
     @State private var instagramHandle: String = ""
     @State private var profileImage: UIImage? = nil
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
 
     @State private var errorMessage: String?
     @State private var isCreatingAccount = false
-    @State private var navigateToTour = false
 
     @EnvironmentObject var authViewModel: AuthViewModel
 
@@ -61,21 +58,40 @@ struct ProfileSetupView: View {
                 loadProfileImage()
             }
 
+            // Full Name Field
             TextField("Full Name", text: $fullName)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.words)
                 .padding(.horizontal)
+                .onChange(of: fullName) { newValue in
+                    fullName = validateFullName(newValue)
+                }
 
+            // Username Field
             TextField("Username", text: $username)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.none)
                 .padding(.horizontal)
+                .onChange(of: username) { newValue in
+                    username = validateUsername(newValue)
+                }
 
+            // Bio Field
+            TextField("Bio (Optional, max 80 characters)", text: $bio)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .autocapitalization(.sentences)
+                .padding(.horizontal)
+                .onChange(of: bio) { newValue in
+                    bio = validateBio(newValue)
+                }
+
+            // Instagram Handle Field
             TextField("Instagram Handle (Optional)", text: $instagramHandle)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.none)
                 .padding(.horizontal)
 
+            // Create Account Button
             Button("Create Account") {
                 validateAndSubmit()
             }
@@ -87,18 +103,19 @@ struct ProfileSetupView: View {
             .cornerRadius(10)
             .padding(.horizontal)
 
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .font(Font.custom("OpenSans", size: 14))
+                    .padding(.top)
+            }
+
             Spacer()
         }
         .background(Color(.systemBackground).ignoresSafeArea())
-        .fullScreenCover(isPresented: $navigateToTour, onDismiss: {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                authViewModel.isAuthenticated = true
-            }
-        }) {
-            TourView().environmentObject(authViewModel)
-        }
     }
 
+    // MARK: - Validate and Submit
     private func validateAndSubmit() {
         errorMessage = nil
 
@@ -111,6 +128,7 @@ struct ProfileSetupView: View {
         authViewModel.createUserAfterProfileSetup(
             fullName: fullName,
             username: username,
+            bio: bio, // ✅ Include bio in Firestore
             instagramHandle: instagramHandle,
             profileImage: profileImage,
             password: password
@@ -119,11 +137,15 @@ struct ProfileSetupView: View {
                 errorMessage = error
                 isCreatingAccount = false
             } else {
-                navigateToTour = true
+                // Directly set isAuthenticated to true to navigate to LoggedInView
+                DispatchQueue.main.async {
+                    authViewModel.isAuthenticated = true
+                }
             }
         }
     }
 
+    // MARK: - Load Profile Image
     private func loadProfileImage() {
         guard let selectedPhotoItem else { return }
         selectedPhotoItem.loadTransferable(type: Data.self) { result in
@@ -140,5 +162,25 @@ struct ProfileSetupView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Input Validation
+    private func validateFullName(_ name: String) -> String {
+        let allowedCharacters = CharacterSet.letters
+            .union(.decimalDigits)
+            .union(CharacterSet(charactersIn: "-' "))
+
+        let filtered = name.unicodeScalars.filter { allowedCharacters.contains($0) }
+        return String(filtered.prefix(40))
+    }
+
+    private func validateUsername(_ name: String) -> String {
+        let allowedCharacters = CharacterSet.letters.union(.decimalDigits)
+        let filtered = name.unicodeScalars.filter { allowedCharacters.contains($0) }
+        return String(filtered.prefix(20))
+    }
+
+    private func validateBio(_ text: String) -> String {
+        return String(text.prefix(80))
     }
 }

@@ -2,7 +2,13 @@ import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
 import PhotosUI
-import SwiftyCrop
+
+// An enum for the user’s post filter choice
+enum ProfilePostFilter: String, CaseIterable {
+    case today       = "today"
+    case last7days   = "last7days"
+    case all         = "all"
+}
 
 struct SettingsView: View {
     @State private var fullName: String = ""
@@ -13,16 +19,19 @@ struct SettingsView: View {
     @State private var errorMessage: String?
     @State private var isUpdating = false
 
+    // New: store the user’s selected filter
+    @State private var selectedFilter: ProfilePostFilter = .all
+
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
         VStack(spacing: 16) {
             Text("Edit Profile")
-                .font(Font.custom("BebasNeue-Regular", size: 24))
+                .font(.custom("BebasNeue-Regular", size: 24))
                 .padding(.top, 40)
 
-            // Profile Picture Picker (Replaces existing one, no cropping)
+            // MARK: - Profile Picture Picker
             PhotosPicker(selection: $selectedPhotoItem, matching: .images, photoLibrary: .shared()) {
                 if let profileImage = profileImage {
                     Image(uiImage: profileImage)
@@ -43,7 +52,7 @@ struct SettingsView: View {
                 loadProfileImage()
             }
 
-            // Full Name Input
+            // MARK: - Full Name Input
             TextField("Full Name", text: $fullName)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.words)
@@ -54,7 +63,7 @@ struct SettingsView: View {
                     }
                 }
 
-            // Username Input
+            // MARK: - Username Input
             TextField("Username", text: $username)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.none)
@@ -64,7 +73,7 @@ struct SettingsView: View {
                     username = String(filtered.prefix(20))
                 }
 
-            // Instagram Handle Input (Optional)
+            // MARK: - Instagram Handle
             TextField("Instagram Handle (Optional)", text: $instagramHandle)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.none)
@@ -74,15 +83,28 @@ struct SettingsView: View {
                     instagramHandle = String(filtered.prefix(36))
                 }
 
-            // Error Message
+            // MARK: - Post Filter Picker
+            Text("Which posts to display on your profile?")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+
+            Picker("Profile Posts", selection: $selectedFilter) {
+                Text("Only Today").tag(ProfilePostFilter.today)
+                Text("Last 7 Days").tag(ProfilePostFilter.last7days)
+                Text("All Time").tag(ProfilePostFilter.all)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+
+            // MARK: - Error Message
             if let errorMessage = errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
-                    .font(Font.custom("OpenSans", size: 14))
+                    .font(.custom("OpenSans", size: 14))
                     .padding(.top)
             }
 
-            // Save Changes Button
+            // MARK: - Save Button
             Button("Save Changes") {
                 validateAndSubmit()
             }
@@ -91,7 +113,7 @@ struct SettingsView: View {
             .frame(height: 50)
             .background(isUpdating ? Color.gray : Color.blue)
             .foregroundColor(.white)
-            .font(Font.custom("BebasNeue-Regular", size: 18))
+            .font(.custom("BebasNeue-Regular", size: 18))
             .cornerRadius(10)
             .padding(.horizontal)
 
@@ -103,6 +125,7 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Load Selected Photo
     private func loadProfileImage() {
         guard let selectedPhotoItem else { return }
 
@@ -122,14 +145,13 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Validate Input, Check Username, then Save
     private func validateAndSubmit() {
         errorMessage = nil
-
         guard !fullName.isEmpty, !username.isEmpty else {
             errorMessage = "All required fields must be filled out."
             return
         }
-
         isUpdating = true
         checkUsernameAvailability(username) { isAvailable in
             if isAvailable {
@@ -141,6 +163,7 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Check Username
     private func checkUsernameAvailability(_ username: String, completion: @escaping (Bool) -> Void) {
         let db = Firestore.firestore()
         db.collection("users").whereField("username", isEqualTo: username).getDocuments { snapshot, error in
@@ -153,6 +176,7 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Save to Firestore
     private func saveProfileData() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
 
@@ -160,61 +184,74 @@ struct SettingsView: View {
         var userData: [String: Any] = [
             "fullName": self.fullName,
             "username": self.username,
-            "instagramHandle": self.instagramHandle
+            "instagramHandle": self.instagramHandle,
+            "profilePostFilter": self.selectedFilter.rawValue // store the filter
         ]
 
-        // Upload profile picture if changed
+        // If profileImage changed, upload
         if let profileImage = profileImage {
-            let storageRef = FirebaseManager.shared.storage.reference().child("profile_pictures/\(uid).jpg")
-            guard let imageData = profileImage.jpegData(compressionQuality: 0.7) else { return }
-
+            let storageRef = FirebaseManager.shared.storage
+                .reference().child("profile_pictures/\(uid).jpg")
+            guard let imageData = profileImage.jpegData(compressionQuality: 0.7) else {
+                self.isUpdating = false
+                return
+            }
             storageRef.putData(imageData, metadata: nil) { _, error in
                 if let error = error {
                     self.errorMessage = "Error uploading profile picture: \(error.localizedDescription)"
                     self.isUpdating = false
                     return
                 }
-
                 storageRef.downloadURL { url, error in
                     if let error = error {
                         self.errorMessage = "Error retrieving image URL: \(error.localizedDescription)"
                         self.isUpdating = false
                         return
                     }
-
                     guard let imageUrl = url?.absoluteString else { return }
                     userData["profilePictureURL"] = imageUrl
 
-                    // Save to Firestore
                     db.collection("users").document(uid).updateData(userData) { error in
                         if let error = error {
                             self.errorMessage = "Error saving profile data: \(error.localizedDescription)"
                         }
                         self.isUpdating = false
+                        // close view
+                        self.presentationMode.wrappedValue.dismiss()
                     }
                 }
             }
         } else {
-            // No new profile picture, just update Firestore
+            // No new profile picture
             db.collection("users").document(uid).updateData(userData) { error in
                 if let error = error {
                     self.errorMessage = "Error saving profile data: \(error.localizedDescription)"
                 }
                 self.isUpdating = false
+                // close
+                self.presentationMode.wrappedValue.dismiss()
             }
         }
     }
 
+    // MARK: - Load Existing User Profile
     private func loadUserProfile() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-
         let db = Firestore.firestore()
         db.collection("users").document(uid).getDocument { document, error in
-            if let document = document, document.exists {
-                let data = document.data()
-                self.fullName = data?["fullName"] as? String ?? ""
-                self.username = data?["username"] as? String ?? ""
-                self.instagramHandle = data?["instagramHandle"] as? String ?? ""
+            if let doc = document, doc.exists {
+                let data = doc.data() ?? [:]
+                self.fullName = data["fullName"] as? String ?? ""
+                self.username = data["username"] as? String ?? ""
+                self.instagramHandle = data["instagramHandle"] as? String ?? ""
+
+                // If no filter stored yet, default to "all"
+                if let rawFilter = data["profilePostFilter"] as? String,
+                   let f = ProfilePostFilter(rawValue: rawFilter) {
+                    self.selectedFilter = f
+                } else {
+                    self.selectedFilter = .all
+                }
             } else {
                 self.errorMessage = "Error loading profile."
             }

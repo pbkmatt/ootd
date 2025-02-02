@@ -3,12 +3,21 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct PostView: View {
-    var post: OOTDPost
+    let post: OOTDPost
+
+    // Comments
     @State private var comments: [Comment] = []
     @State private var newComment = ""
+
+    // Favorites
     @State private var isFavorited = false
     @State private var favoriteCount: Int
-    @EnvironmentObject var authViewModel: AuthViewModel
+
+    // Show the “tagged items” sheet
+    @State private var showTaggedItemsSheet = false
+
+    // Show the “add to closet” sheet
+    @State private var isAddToClosetSheetPresented = false
 
     init(post: OOTDPost) {
         self.post = post
@@ -16,21 +25,22 @@ struct PostView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 0) {
             // Post Image
             AsyncImage(url: URL(string: post.imageURL)) { image in
-                image.resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 400)
-                    .cornerRadius(10)
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: UIScreen.main.bounds.width)
+                    .clipped()
             } placeholder: {
                 ProgressView()
             }
 
             // Action Buttons
             HStack(spacing: 20) {
-                // Favorite Button
-                Button(action: { toggleFavorite() }) {
+                // Favorite
+                Button(action: toggleFavorite) {
                     Image(systemName: isFavorited ? "star.fill" : "star")
                         .resizable()
                         .scaledToFit()
@@ -41,7 +51,7 @@ struct PostView: View {
                     .font(.subheadline)
                     .foregroundColor(.gray)
 
-                // Comment Button
+                // Comment
                 Button(action: {}) {
                     Image(systemName: "bubble.right")
                         .resizable()
@@ -53,9 +63,20 @@ struct PostView: View {
                     .font(.subheadline)
                     .foregroundColor(.gray)
 
-                // Shopping Bag Button (Tagged Items)
+                // Share (placeholder)
+                Button(action: {}) {
+                    Image(systemName: "paperplane")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                        .foregroundColor(.gray)
+                }
+
+                // Shopping Bag (tagged items)
                 if !post.taggedItems.isEmpty {
-                    Button(action: { showTaggedItems() }) {
+                    Button(action: {
+                        showTaggedItemsSheet = true
+                    }) {
                         Image(systemName: "bag")
                             .resizable()
                             .scaledToFit()
@@ -64,8 +85,10 @@ struct PostView: View {
                     }
                 }
 
-                // Add to Board Button (Placeholder)
-                Button(action: {}) {
+                // Add to Closet
+                Button(action: {
+                    isAddToClosetSheetPresented = true
+                }) {
                     Image(systemName: "plus")
                         .resizable()
                         .scaledToFit()
@@ -84,6 +107,7 @@ struct PostView: View {
                     .font(.subheadline)
                     .foregroundColor(.primary)
                     .padding(.horizontal, 15)
+                    .padding(.top, 5)
             }
 
             // Comments Section
@@ -102,9 +126,9 @@ struct PostView: View {
                             // Profile Picture
                             AsyncImage(url: URL(string: comment.profileImage)) { image in
                                 image.resizable()
-                                    .scaledToFill()
-                                    .frame(width: 30, height: 30)
-                                    .clipShape(Circle())
+                                     .scaledToFill()
+                                     .frame(width: 30, height: 30)
+                                     .clipShape(Circle())
                             } placeholder: {
                                 Circle()
                                     .fill(Color.gray.opacity(0.3))
@@ -112,7 +136,6 @@ struct PostView: View {
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
-                                // Username & Comment Text
                                 HStack {
                                     Text(comment.username)
                                         .bold()
@@ -152,14 +175,27 @@ struct PostView: View {
         }
         .navigationTitle("Post")
         .navigationBarTitleDisplayMode(.inline)
+
+        // MARK: - Tagged Items Sheet
+        .sheet(isPresented: $showTaggedItemsSheet) {
+            // iOS 16 only: let the sheet appear as a “medium” and “large” detent
+            TaggedItemsSheet(items: post.taggedItems)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+
+        // MARK: - Add to Closet Sheet
+        .sheet(isPresented: $isAddToClosetSheetPresented) {
+            AddToClosetView(postId: post.id ?? "")
+        }
     }
 
     // MARK: - Load Comments
     private func loadComments() {
-        let db = Firestore.firestore()
         guard let postId = post.id else { return }
-
-        db.collection("posts").document(postId).collection("comments")
+        let db = Firestore.firestore()
+        db.collection("posts").document(postId)
+            .collection("comments")
             .order(by: "timestamp", descending: true)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
@@ -167,94 +203,126 @@ struct PostView: View {
                     return
                 }
                 if let snapshot = snapshot {
-                    self.comments = snapshot.documents.compactMap { doc -> Comment? in
+                    self.comments = snapshot.documents.compactMap { doc in
                         try? doc.data(as: Comment.self)
                     }
                 }
             }
     }
 
-    // MARK: - Add Comment
+    // MARK: - Add a Comment
     private func addComment() {
-        guard !newComment.isEmpty, let uid = Auth.auth().currentUser?.uid else { return }
-        let db = Firestore.firestore()
+        guard !newComment.isEmpty,
+              let uid = Auth.auth().currentUser?.uid,
+              let postId = post.id else { return }
 
+        let db = Firestore.firestore()
         db.collection("users").document(uid).getDocument { document, error in
             if let error = error {
                 print("Error fetching user data: \(error.localizedDescription)")
                 return
             }
-
             guard let data = document?.data(),
                   let username = data["username"] as? String,
-                  let profileImage = data["profileImage"] as? String else { return }
+                  let profileImage = data["profilePictureURL"] as? String
+            else { return }
 
-            let comment = Comment(
-                id: UUID().uuidString,
-                userId: uid,
-                username: username,
-                profileImage: profileImage,
-                text: newComment,
-                timestamp: Timestamp(date: Date())
-            )
+            let newCommentDoc = db.collection("posts")
+                                  .document(postId)
+                                  .collection("comments")
+                                  .document()
 
-            db.collection("posts").document(post.id ?? "")
-                .collection("comments")
-                .document(comment.id)
-                .setData(comment.toDict()) { error in
-                    if let error = error {
-                        print("Error adding comment: \(error.localizedDescription)")
-                    } else {
-                        self.comments.append(comment) // **Optimized: Adds comment locally**
-                        self.newComment = ""
-                    }
+            let commentData: [String: Any] = [
+                "userId": uid,
+                "username": username,
+                "profileImage": profileImage,
+                "text": newComment,
+                "timestamp": Timestamp()
+            ]
+
+            newCommentDoc.setData(commentData) { error in
+                if let error = error {
+                    print("Error adding comment: \(error.localizedDescription)")
+                } else {
+                    // Insert the new comment locally
+                    let postedComment = Comment(
+                        id: newCommentDoc.documentID,
+                        userId: uid,
+                        username: username,
+                        profileImage: profileImage,
+                        text: newComment,
+                        timestamp: Timestamp()
+                    )
+                    self.comments.insert(postedComment, at: 0)
+                    self.newComment = ""
                 }
+            }
         }
     }
 
-    // MARK: - Toggle Favorite
-    private func toggleFavorite() {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
-
-        let db = Firestore.firestore()
-        let favoriteRef = db.collection("users").document(uid).collection("favorites").document(post.id ?? "")
-
-        if isFavorited {
-            favoriteRef.delete()
-            favoriteCount -= 1
-        } else {
-            favoriteRef.setData(["favoritedAt": Timestamp()])
-            favoriteCount += 1
-        }
-        
-        isFavorited.toggle()
-    }
-
-    // MARK: - Navigate to User Profile
-    private func navigateToProfile(userId: String) {
-        // Navigation logic to UserProfileDetailView
-    }
-
-    // MARK: - Show Tagged Items (Placeholder)
-    private func showTaggedItems() {
-        // Functionality to display tagged items
-    }
-    
+    // MARK: - Check Favorite
     private func checkFavoriteStatus(postID: String) {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-
         let db = Firestore.firestore()
         db.collection("posts").document(postID)
             .collection("favorites").document(uid)
             .getDocument { document, error in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        print("Error checking favorite status: \(error.localizedDescription)")
-                        return
-                    }
-                    self.isFavorited = document?.exists ?? false
+                if let error = error {
+                    print("Error checking favorite status: \(error.localizedDescription)")
+                    return
                 }
+                self.isFavorited = document?.exists ?? false
             }
     }
 
+    // MARK: - Toggle Favorite
+    private func toggleFavorite() {
+        guard let uid = Auth.auth().currentUser?.uid,
+              let postID = post.id else { return }
+
+        let db = Firestore.firestore()
+        let postRef = db.collection("posts").document(postID)
+        let favoriteRef = postRef.collection("favorites").document(uid)
+
+        if isFavorited {
+            favoriteRef.delete()
+            postRef.updateData(["favoritesCount": FieldValue.increment(Int64(-1))])
+            favoriteCount -= 1
+        } else {
+            favoriteRef.setData(["favoritedAt": Timestamp()])
+            postRef.updateData(["favoritesCount": FieldValue.increment(Int64(1))])
+            favoriteCount += 1
+        }
+        isFavorited.toggle()
+    }
+
+    // MARK: - Navigation
+    private func navigateToProfile(userId: String) {
+        // Show user’s profile
+    }
+}
+
+// MARK: - TaggedItemsSheet
+struct TaggedItemsSheet: View {
+    let items: [TaggedItem]
+
+    var body: some View {
+        NavigationView {
+            List(items) { item in
+                // Attempt to sanitize the link
+                if let link = item.link?.sanitizedAsURL(),
+                   let url = URL(string: link) {
+                    // If valid link -> clickable
+                    Link(destination: url) {
+                        Text(item.name)
+                    }
+                } else {
+                    // No link or invalid link -> plain text
+                    Text(item.name)
+                }
+            }
+            .navigationTitle("Tagged Items")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
 }

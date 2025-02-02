@@ -6,31 +6,42 @@ import FirebaseAuth
 
 struct PostOOTDView: View {
     let capturedImage: UIImage
+    
     @State private var caption: String = ""
-    @State private var tags: [String] = []
     @State private var isUploading: Bool = false
     @State private var uploadProgress: Double = 0.0
+
+    // Replace old tags array with an array of TaggedItem
+    @State private var taggedItems: [TaggedItem] = []
+
+    // For adding a new item
+    @State private var currentItemName: String = ""
+    @State private var currentItemLink: String = ""
+
     @Environment(\.presentationMode) private var presentationMode
     @State private var showAlert = false
     @State private var alertMessage = ""
-    
+
     var body: some View {
         NavigationView {
             VStack {
+                // The captured photo
                 Image(uiImage: capturedImage)
                     .resizable()
                     .scaledToFit()
                     .frame(maxHeight: 300)
                     .cornerRadius(10)
                     .padding()
-                
+
+                // Caption
                 TextField("Write a caption...", text: $caption)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding()
-                
-                TagInputView(tags: $tags)
-                    .padding()
-                
+
+                // MARK: - Tagged Items UI
+                taggedItemsSection
+
+                // Upload Progress or Upload Button
                 if isUploading {
                     ProgressView(value: uploadProgress, total: 1.0)
                         .padding()
@@ -53,47 +64,116 @@ struct PostOOTDView: View {
                 presentationMode.wrappedValue.dismiss()
             })
             .alert(isPresented: $showAlert) {
-                Alert(title: Text("Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+                Alert(title: Text("Error"),
+                      message: Text(alertMessage),
+                      dismissButton: .default(Text("OK")))
             }
         }
     }
-    
+
+    // MARK: - Tagged Items Section
+    private var taggedItemsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Tag up to 5 items:")
+                .font(.headline)
+                .padding(.horizontal)
+
+            // A list of existing items
+            ForEach(taggedItems) { item in
+                HStack {
+                    Text(item.name)
+                        .fontWeight(.medium)
+                    if let link = item.link, !link.isEmpty {
+                        Text("(Link: \(link))")
+                            .font(.footnote)
+                            .foregroundColor(.blue)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal)
+            }
+
+            // Add new item fields
+            HStack {
+                VStack(alignment: .leading) {
+                    TextField("Item name", text: $currentItemName)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .disableAutocorrection(true)
+                        .autocapitalization(.none)
+                    TextField("Optional link", text: $currentItemLink)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .disableAutocorrection(true)
+                        .autocapitalization(.none)
+                }
+                .frame(minWidth: 0, maxWidth: .infinity)
+
+                Button(action: addTaggedItem) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 24))
+                        .padding(.leading, 8)
+                }
+                .disabled(taggedItems.count >= 5 || currentItemName.isEmpty)
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    // MARK: - Add a tagged item
+    private func addTaggedItem() {
+        // Validate name
+        guard TaggedItem.isValidName(currentItemName) else {
+            alertMessage = "Item name must be letters/numbers/spaces only (1–40 chars)."
+            showAlert = true
+            return
+        }
+        if taggedItems.count >= 5 {
+            alertMessage = "You can only add up to 5 items."
+            showAlert = true
+            return
+        }
+
+        let newItem = TaggedItem(name: currentItemName, link: currentItemLink)
+        taggedItems.append(newItem)
+        currentItemName = ""
+        currentItemLink = ""
+    }
+
+    // MARK: - Upload Post
     func uploadPost() {
         isUploading = true
 
-        // Fetch the username from Firestore
-        fetchUsername { username in
-            // Add watermark with the username
-            let watermarkedImage = capturedImage.addWatermark(
-                username: username,
+        // 1) Fetch the user’s profile so we can attach username & profileImage
+        fetchUserProfile { userProfile in
+            // 2) Add watermark with the username
+            let watermarked = capturedImage.addWatermark(
+                username: userProfile.username,
                 fontName: "BebasNeue-Regular",
-                fontSize: max(capturedImage.size.width, capturedImage.size.height) / 20, // Dynamically scale font size
+                fontSize: max(capturedImage.size.width, capturedImage.size.height) / 20,
                 textColor: .white
             )
 
-            // Convert the watermarked image to Data
-            guard let imageData = watermarkedImage.jpegData(compressionQuality: 0.9) else {
+            // 3) Convert watermarked image to Data
+            guard let imageData = watermarked.jpegData(compressionQuality: 0.9) else {
                 alertMessage = "Failed to process the image."
                 showAlert = true
                 isUploading = false
                 return
             }
 
-            // Create unique filename for Firebase Storage
+            // 4) Create unique file name in Firebase Storage
             let fileName = UUID().uuidString + ".jpg"
             let storageRef = Storage.storage().reference().child("posts/\(fileName)")
 
-            // Upload the image to Firebase Storage
-            storageRef.putData(imageData, metadata: nil) { _, error in
+            // 5) Upload the image to Firebase Storage
+            let uploadTask = storageRef.putData(imageData, metadata: nil) { _, error in
                 if let error = error {
-                    print("Error uploading image to Firebase Storage: \(error.localizedDescription)")
+                    print("Error uploading image: \(error.localizedDescription)")
                     alertMessage = "Image upload failed: \(error.localizedDescription)"
                     showAlert = true
                     isUploading = false
                     return
                 }
-
-                // Retrieve the download URL for the uploaded image
+                // 6) Retrieve the download URL
                 storageRef.downloadURL { url, error in
                     if let error = error {
                         print("Error getting download URL: \(error.localizedDescription)")
@@ -102,80 +182,87 @@ struct PostOOTDView: View {
                         isUploading = false
                         return
                     }
-
                     guard let url = url else {
-                        print("Download URL is nil.")
                         alertMessage = "Download URL is nil."
                         showAlert = true
                         isUploading = false
                         return
                     }
+                    // 7) Save post to Firestore
+                    savePostToFirestore(
+                        imageURL: url.absoluteString,
+                        userProfile: userProfile
+                    )
+                }
+            }
 
-                    print("Image uploaded successfully. URL: \(url.absoluteString)")
-
-                    // Save post to Firestore
-                    self.savePostToFirestore(imageURL: url.absoluteString)
+            // Optionally track progress
+            uploadTask.observe(.progress) { snapshot in
+                if let progress = snapshot.progress {
+                    uploadProgress = Double(progress.completedUnitCount)
+                                   / Double(progress.totalUnitCount)
                 }
             }
         }
     }
 
-    // MARK: - Save Post to Global Firestore `posts` Collection
-    private func savePostToFirestore(imageURL: String) {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            alertMessage = "Failed to retrieve user ID."
-            showAlert = true
-            isUploading = false
-            return
+    // MARK: - Save Post to Firestore
+    private func savePostToFirestore(imageURL: String, userProfile: (uid: String, username: String, profileImg: String)) {
+        let db = Firestore.firestore()
+
+        // Convert the array of TaggedItem to an array of dictionaries
+        let taggedItemsData = taggedItems.map { item -> [String: Any] in
+            [
+                "id": item.id,
+                "name": item.name,
+                "link": item.link ?? ""
+            ]
         }
 
-        let db = Firestore.firestore()
-        let globalPostsCollection = db.collection("posts") // ✅ Now using global `posts` collection
-
-        // Create post data
         let postData: [String: Any] = [
+            "uid": userProfile.uid,
+            "username": userProfile.username,
+            "profileImage": userProfile.profileImg,
             "caption": caption.isEmpty ? "No caption" : caption,
             "imageURL": imageURL,
-            "taggedItems": tags.isEmpty ? [] : tags,
+            "taggedItems": taggedItemsData, // <— array of dictionaries
             "timestamp": Timestamp(),
-            "visibility": "public", // Default to public visibility
-            "commentsCount": 0, // Default value
-            "favoritesCount": 0, // Default value
-            "uid": userId // Store user ID to allow filtering
+            "visibility": "public",
+            "commentsCount": 0,
+            "favoritesCount": 0
         ]
 
-        // Save post to Firestore
-        print("Saving post with data: \(postData)")
-        globalPostsCollection.addDocument(data: postData) { error in
+        db.collection("posts").addDocument(data: postData) { error in
             isUploading = false
-
             if let error = error {
-                print("Error saving post to Firestore: \(error.localizedDescription)")
+                print("Error saving post: \(error.localizedDescription)")
                 alertMessage = "Failed to save post: \(error.localizedDescription)"
                 showAlert = true
                 return
             }
-
             print("✅ Post saved successfully in Firestore!")
             presentationMode.wrappedValue.dismiss()
         }
     }
 
-    func fetchUsername(completion: @escaping (String) -> Void) {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            completion("guest") // Default to "guest" if no authenticated user
+    // MARK: - Fetch user’s profile (username, profilePictureURL)
+    func fetchUserProfile(completion: @escaping ((uid: String, username: String, profileImg: String)) -> Void) {
+        guard let currentUser = Auth.auth().currentUser else {
+            completion(("guestUID", "guest", ""))
             return
         }
-
-        Firestore.firestore().collection("users").document(userId).getDocument { document, error in
+        let db = Firestore.firestore()
+        db.collection("users").document(currentUser.uid).getDocument { document, error in
             if let error = error {
-                print("Error fetching username: \(error.localizedDescription)")
-                completion("guest") // Default to "guest" on error
+                print("Error fetching user data: \(error.localizedDescription)")
+                completion((currentUser.uid, "guest", ""))
                 return
             }
 
-            let username = document?.data()?["username"] as? String ?? "guest"
-            completion(username)
+            let data = document?.data() ?? [:]
+            let username = data["username"] as? String ?? "guest"
+            let profileImg = data["profilePictureURL"] as? String ?? ""
+            completion((currentUser.uid, username, profileImg))
         }
     }
 }

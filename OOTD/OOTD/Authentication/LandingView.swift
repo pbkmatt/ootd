@@ -33,13 +33,19 @@ struct LandingView: View {
                 }
             }
             .background(Color(.systemBackground).ignoresSafeArea())
-            .fullScreenCover(isPresented: $authViewModel.isAuthenticated) {
+            .fullScreenCover(isPresented: Binding(
+                get: { authViewModel.isAuthenticated },
+                set: { _ in authViewModel.checkAuthState() } // Ensure proper state checking
+            )) {
                 if authViewModel.needsProfileSetup {
                     ProfileSetupView(password: authViewModel.currentPassword).environmentObject(authViewModel)
                 } else {
                     LoggedInView().environmentObject(authViewModel)
                 }
             }
+        }
+        .onAppear {
+            authViewModel.checkAuthState() // Ensure authentication state is always updated
         }
     }
 }

@@ -15,7 +15,12 @@ struct UserProfileView: View {
     @State private var isLoading: Bool = true
     @State private var errorMessage: String?
 
+    // We'll store the filter to apply
+    @State private var profileFilter: ProfilePostFilter = .all
+
+    @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.presentationMode) var presentationMode
+    @State private var isSettingsViewPresented = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,19 +36,61 @@ struct UserProfileView: View {
                         statsAndBio
 
                         if let todaysOOTD = todaysOOTD {
-                            todaysOOTDSection(todaysOOTD)
+                            Text("Today's OOTD")
+                                .font(.custom("BebasNeue-Regular", size: 20))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.leading, 8)
+
+                            NavigationLink(destination: PostView(post: todaysOOTD)) {
+                                AsyncImage(url: URL(string: todaysOOTD.imageURL)) { image in
+                                    image.resizable()
+                                         .scaledToFit()
+                                         .cornerRadius(10)
+                                } placeholder: {
+                                    ProgressView()
+                                }
+                                .padding(.horizontal)
+                            }
                         }
 
                         if !pastOOTDs.isEmpty {
-                            pastOOTDsSection
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Past OOTDs")
+                                    .font(.custom("BebasNeue-Regular", size: 20))
+                                    .padding(.leading, 8)
+
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())],
+                                          spacing: 16) {
+                                    ForEach(pastOOTDs) { post in
+                                        NavigationLink(destination: PostView(post: post)) {
+                                            AsyncImage(url: URL(string: post.imageURL)) { image in
+                                                image.resizable()
+                                                     .scaledToFill()
+                                                     .frame(width: UIScreen.main.bounds.width / 2 - 20,
+                                                            height: UIScreen.main.bounds.width / 2 - 20)
+                                                     .cornerRadius(10)
+                                            } placeholder: {
+                                                Color.gray
+                                                    .frame(width: UIScreen.main.bounds.width / 2 - 20,
+                                                           height: UIScreen.main.bounds.width / 2 - 20)
+                                                    .cornerRadius(10)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal)
                         } else {
                             Text("No past OOTDs yet!")
-                                .font(Font.custom("OpenSans", size: 14))
+                                .font(.custom("OpenSans", size: 14))
                                 .foregroundColor(.gray)
                                 .padding()
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.top, 12)
+                }
+                .refreshable {
+                    await loadProfileAndPosts()
                 }
                 .transition(.opacity)
             }
@@ -53,19 +100,36 @@ struct UserProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: signOut) {
-                    Text("Sign Out")
-                        .font(Font.custom("BebasNeue-Regular", size: 14))
-                        .foregroundColor(.red)
+                HStack {
+                    // Edit Profile Button
+                    Button("Edit Profile") {
+                        isSettingsViewPresented = true
+                    }
+                    .font(.custom("BebasNeue-Regular", size: 14))
+
+                    // Sign Out
+                    Button(action: signOut) {
+                        Text("Sign Out")
+                            .font(.custom("BebasNeue-Regular", size: 14))
+                            .foregroundColor(.red)
+                    }
                 }
             }
         }
+        .sheet(isPresented: $isSettingsViewPresented) {
+            SettingsView().environmentObject(authViewModel)
+        }
         .onAppear {
             Task {
-                await fetchUserProfile()
-                await fetchUserPosts()
+                await loadProfileAndPosts()
             }
         }
+    }
+
+    // MARK: - Async load
+    private func loadProfileAndPosts() async {
+        await fetchUserProfile()
+        await fetchUserPosts()
     }
 
     // MARK: - Profile Header
@@ -73,7 +137,8 @@ struct UserProfileView: View {
         VStack(spacing: 8) {
             if let url = URL(string: profilePictureURL), !profilePictureURL.isEmpty {
                 AsyncImage(url: url) { image in
-                    image.resizable()
+                    image
+                        .resizable()
                         .scaledToFill()
                         .frame(width: 120, height: 120)
                         .clipShape(Circle())
@@ -90,26 +155,19 @@ struct UserProfileView: View {
             }
 
             Text(fullName.isEmpty ? "No Full Name" : fullName)
-                .font(Font.custom("BebasNeue-Regular", size: 24))
+                .font(.custom("BebasNeue-Regular", size: 24))
 
             Text(username.isEmpty ? "@username" : "@\(username)")
-                .font(Font.custom("BebasNeue-Regular", size: 16))
+                .font(.custom("BebasNeue-Regular", size: 16))
                 .foregroundColor(.primary)
 
             if !instagramHandle.isEmpty {
-                Link(instagramHandle, destination: URL(string: "https://instagram.com/\(instagramHandle.replacingOccurrences(of: "@", with: ""))")!)
-                    .font(Font.custom("BebasNeue-Regular", size: 16))
-                    .foregroundStyle(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color(red: 0.976, green: 0.537, blue: 0.337), Color(red: 0.545, green: 0.298, blue: 0.847)]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .underline()
+                Link(instagramHandle,
+                     destination: URL(string: "https://instagram.com/\(instagramHandle.replacingOccurrences(of: "@", with: ""))")!)
+                .font(.custom("BebasNeue-Regular", size: 16))
+                .underline()
             }
         }
-        .padding(.top, 12)
     }
 
     // MARK: - Stats and Bio
@@ -118,67 +176,26 @@ struct UserProfileView: View {
             HStack(spacing: 40) {
                 VStack {
                     Text("\(followersCount)")
-                        .font(Font.custom("BebasNeue-Regular", size: 18))
+                        .font(.custom("BebasNeue-Regular", size: 18))
                     Text("Followers")
-                        .font(Font.custom("OpenSans", size: 14))
+                        .font(.custom("OpenSans", size: 14))
                         .foregroundColor(.secondary)
                 }
-
                 VStack {
                     Text("\(followingCount)")
-                        .font(Font.custom("BebasNeue-Regular", size: 18))
+                        .font(.custom("BebasNeue-Regular", size: 18))
                     Text("Following")
-                        .font(Font.custom("OpenSans", size: 14))
+                        .font(.custom("OpenSans", size: 14))
                         .foregroundColor(.secondary)
                 }
             }
 
             if !bio.isEmpty {
                 Text(bio)
-                    .font(Font.custom("OpenSans", size: 14))
+                    .font(.custom("OpenSans", size: 14))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 16)
-            }
-        }
-        .padding(.top, 10)
-    }
-
-    // MARK: - Today's OOTD Section
-    private func todaysOOTDSection(_ post: OOTDPost) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Today's OOTD")
-                .font(Font.custom("BebasNeue-Regular", size: 20))
-
-            PostView(post: post)
-                .cornerRadius(10)
-        }
-    }
-
-    // MARK: - Past OOTDs Section
-    private var pastOOTDsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Past OOTDs")
-                .font(Font.custom("BebasNeue-Regular", size: 20))
-                .padding(.leading, 8)
-
-            Text("Past OOTDs Count: \(pastOOTDs.count)")  // ✅ Debug print in UI
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                ForEach(pastOOTDs) { post in
-                    NavigationLink(destination: PostView(post: post)) {
-                        AsyncImage(url: URL(string: post.imageURL ?? "")) { image in
-                            image.resizable()
-                                .scaledToFill()
-                                .frame(width: UIScreen.main.bounds.width / 2 - 20, height: UIScreen.main.bounds.width / 2 - 20)
-                                .cornerRadius(10)
-                        } placeholder: {
-                            Color.gray
-                                .frame(width: UIScreen.main.bounds.width / 2 - 20, height: UIScreen.main.bounds.width / 2 - 20)
-                                .cornerRadius(10)
-                        }
-                    }
-                }
             }
         }
     }
@@ -187,9 +204,11 @@ struct UserProfileView: View {
     private func signOut() {
         do {
             try Auth.auth().signOut()
-            presentationMode.wrappedValue.dismiss()
+            DispatchQueue.main.async {
+                authViewModel.isAuthenticated = false
+            }
         } catch {
-            print("Error signing out: \(error.localizedDescription)")
+            print("❌ Error signing out: \(error.localizedDescription)")
         }
     }
 
@@ -197,23 +216,35 @@ struct UserProfileView: View {
     private func fetchUserProfile() async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         do {
-            let document = try await Firestore.firestore().collection("users").document(uid).getDocument()
+            let document = try await Firestore.firestore()
+                .collection("users")
+                .document(uid)
+                .getDocument()
             if let data = document.data() {
                 DispatchQueue.main.async {
-                    username = data["username"] as? String ?? "No Username"
-                    fullName = data["fullName"] as? String ?? "No Full Name"
-                    bio = data["bio"] as? String ?? ""
-                    profilePictureURL = data["profilePictureURL"] as? String ?? ""
-                    followersCount = data["followersCount"] as? Int ?? 0
-                    followingCount = data["followingCount"] as? Int ?? 0
-                    instagramHandle = data["instagramHandle"] as? String ?? ""
-                    isLoading = false
+                    self.username = data["username"] as? String ?? "No Username"
+                    self.fullName = data["fullName"] as? String ?? "No Full Name"
+                    self.bio = data["bio"] as? String ?? ""
+                    self.profilePictureURL = data["profilePictureURL"] as? String ?? ""
+                    self.followersCount = data["followersCount"] as? Int ?? 0
+                    self.followingCount = data["followingCount"] as? Int ?? 0
+                    self.instagramHandle = data["instagramHandle"] as? String ?? ""
+
+                    // Read filter
+                    if let filterStr = data["profilePostFilter"] as? String,
+                       let filter = ProfilePostFilter(rawValue: filterStr) {
+                        self.profileFilter = filter
+                    } else {
+                        self.profileFilter = .all
+                    }
+
+                    self.isLoading = false
                 }
             }
         } catch {
             DispatchQueue.main.async {
                 self.errorMessage = "❌ Error fetching user profile: \(error.localizedDescription)"
-                isLoading = false
+                self.isLoading = false
             }
         }
     }
@@ -226,30 +257,49 @@ struct UserProfileView: View {
         }
         do {
             let snapshot = try await Firestore.firestore()
-                .collection("posts")  // ✅ Querying the global posts collection
-                .whereField("uid", isEqualTo: uid)  // ✅ Filtering by user ID
-                .order(by: "timestamp", descending: true)  // ✅ Sorting by timestamp
+                .collection("posts")
+                .whereField("uid", isEqualTo: uid)
+                .order(by: "timestamp", descending: true)
                 .getDocuments()
 
-            print("✅ Firestore returned \(snapshot.documents.count) documents.")
-
-            let posts = snapshot.documents.compactMap { document -> OOTDPost? in
-                let data = document.data()
-                print("📸 Found post: \(data)")
-                return try? document.data(as: OOTDPost.self)
+            let posts = snapshot.documents.compactMap { doc -> OOTDPost? in
+                try? doc.data(as: OOTDPost.self)
             }
 
             DispatchQueue.main.async {
-                todaysOOTD = posts.first(where: { Calendar.current.isDateInToday($0.timestamp.dateValue()) })
-                pastOOTDs = posts.filter { !Calendar.current.isDateInToday($0.timestamp.dateValue()) }
-                isLoading = false
+                let filtered = self.applyProfileFilter(posts)
+                // Separate today's OOTD from the rest (based on 4 AM or standard day)
+                let now = Date()
+                let today4AM = Date.today4AMInEST()
+
+                self.todaysOOTD = filtered.first(where: { $0.timestamp.dateValue() >= today4AM })
+                self.pastOOTDs = filtered.filter {
+                    $0.timestamp.dateValue() < today4AM
+                }
+                self.isLoading = false
             }
         } catch {
             DispatchQueue.main.async {
                 self.errorMessage = "❌ Error fetching posts: \(error.localizedDescription)"
-                print("❌ Firestore Error: \(error.localizedDescription)")
-                isLoading = false
+                self.isLoading = false
             }
         }
     }
+
+    // MARK: - Apply Filter
+    private func applyProfileFilter(_ posts: [OOTDPost]) -> [OOTDPost] {
+        switch profileFilter {
+        case .today:
+            // Only show posts timestamp >= today's 4 AM
+            let boundary = Date.today4AMInEST()
+            return posts.filter { $0.timestamp.dateValue() >= boundary }
+
+        case .last7days:
+            let boundary = Date.daysAgo4AMInEST(7)
+            return posts.filter { $0.timestamp.dateValue() >= boundary }
+
+        case .all:
+            return posts
+        }
     }
+}

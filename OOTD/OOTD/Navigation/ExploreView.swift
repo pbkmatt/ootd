@@ -1,137 +1,166 @@
 import SwiftUI
-import FirebaseFirestore
-import FirebaseAuth
 
 struct ExploreView: View {
+    @StateObject private var vm = ExploreViewModel()
     @State private var searchText: String = ""
-    @State private var users: [UserModel] = []
-    @State private var isLoading: Bool = false
+    @State private var selectedTab: ExploreTab = .users
+    
+    enum ExploreTab {
+        case users
+        case items
+    }
     
     var body: some View {
         NavigationView {
             VStack {
-                // Search Bar
-                HStack {
-                    TextField("Search by username", text: $searchText)
-                        .padding(.horizontal, 16)
-                        .frame(height: 44)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-                        .onChange(of: searchText) { _ in
-                            searchUsers()
-                        }
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                    
-                    Button(action: searchUsers) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.title2)
-                            .padding(.leading, 8)
-                    }
+                // Segmented Picker
+                Picker("", selection: $selectedTab) {
+                    Text("Users").tag(ExploreTab.users)
+                    Text("Items").tag(ExploreTab.items)
                 }
-                .padding(.horizontal)
-                .padding(.top, 8)
-
-                // Loading Indicator
-                if isLoading {
-                    ProgressView("Searching...")
-                        .padding(.top)
-                }
-
-                // Users List
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(users) { user in
-                            NavigationLink(destination: OtherProfileView(user: user)) {
-                                UserCard(user: user)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top)
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
+                
+                switch selectedTab {
+                case .users:
+                    usersTab
+                case .items:
+                    itemsTab
                 }
             }
-            .navigationTitle("Explore")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitle("Explore", displayMode: .inline)
+            .onAppear {
+                vm.fetchRecommendedUsers()
+                vm.loadRecentSearches()
+                if vm.itemsPosts.isEmpty {
+                    vm.fetchItemsPosts(reset: true)
+                }
+            }
         }
     }
     
-    // MARK: - Search Users (Real-Time Suggestions)
-    private func searchUsers() {
-        guard !searchText.isEmpty else {
-            users = []
-            return
-        }
-
-        isLoading = true
-        
-        let db = Firestore.firestore()
-        db.collection("users")
-            .order(by: "username")
-            .start(at: [searchText.lowercased()])
-            .end(at: [searchText.lowercased() + "\u{f8ff}"])
-            .limit(to: 10) // Limit results for better performance
-            .getDocuments { snapshot, error in
-                DispatchQueue.main.async {
-                    isLoading = false
-                    if let error = error {
-                        print("Error searching users: \(error.localizedDescription)")
-                        return
-                    }
-                    
-                    if let snapshot = snapshot {
-                        users = snapshot.documents.compactMap { doc -> UserModel? in
-                            try? doc.data(as: UserModel.self)
+    // MARK: - Users Tab
+    private var usersTab: some View {
+        VStack(spacing: 0) {
+            // Search Bar
+            HStack {
+                TextField("Search by username", text: $searchText)
+                    .padding(.horizontal, 16)
+                    .frame(height: 36)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                    .onChange(of: searchText) { newVal in
+                        if newVal.isEmpty {
+                            vm.searchResults = []
+                        } else {
+                            vm.searchUsers(by: newVal)
                         }
                     }
+                
+                Button(action: {
+                    vm.searchUsers(by: searchText)
+                }) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title2)
+                        .padding(.leading, 8)
                 }
             }
-    }
-}
-
-// MARK: - UserCard Component
-struct UserCard: View {
-    let user: UserModel
-
-    var body: some View {
-        HStack {
-            if let url = URL(string: user.profilePictureURL), !user.profilePictureURL.isEmpty {
-                AsyncImage(url: url) { image in
-                    image.resizable()
-                        .scaledToFill()
-                        .frame(width: 50, height: 50)
-                        .clipShape(Circle())
-                } placeholder: {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 50, height: 50)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            
+            if !searchText.isEmpty {
+                if vm.isLoadingUsers {
+                    ProgressView("Searching...")
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(vm.searchResults, id: \.uid) { user in
+                                // Single NavigationLink row
+                                NavigationLink(destination: OtherProfileView(user: user)) {
+                                    UserSearchCard(user: user)
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.top)
+                    }
                 }
             } else {
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 50, height: 50)
-            }
-
-            VStack(alignment: .leading) {
-                Text(user.username)
-                    .font(Font.custom("BebasNeue-Regular", size: 16))
-                    .foregroundColor(.primary)
-
-                if !user.bio.isEmpty {
-                    Text(user.bio)
-                        .font(Font.custom("OpenSans", size: 14))
-                        .foregroundColor(.gray)
-                        .lineLimit(1)
+                // If no text => show recommended + recents
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Recommended
+                        if !vm.recommendedUsers.isEmpty {
+                            Text("Recommended")
+                                .font(.headline)
+                                .padding(.horizontal)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 16) {
+                                    ForEach(vm.recommendedUsers, id: \.uid) { user in
+                                        // You can use a smaller version or same card
+                                        NavigationLink(destination: OtherProfileView(user: user)) {
+                                            UserSearchCard(user: user)
+                                                .frame(width: 250) // narrower card
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        
+                        // Recents
+                        if !vm.recentSearches.isEmpty {
+                            Text("Recent")
+                                .font(.headline)
+                                .padding(.horizontal)
+                            
+                            // Show a vertical list of recently searched
+                            ForEach(vm.recentSearches, id: \.uid) { user in
+                                HStack {
+                                    NavigationLink(destination: OtherProfileView(user: user)) {
+                                        UserSearchCard(user: user)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: {
+                                        vm.removeFromRecentSearches(user)
+                                    }) {
+                                        Image(systemName: "xmark")
+                                    }
+                                    .padding(.trailing)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top)
                 }
             }
-
-            Spacer()
         }
-        .padding(.horizontal)
-        .frame(height: 60)
-        .background(Color(.systemBackground))
-        .cornerRadius(10)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+    }
+    
+    // MARK: - Items Tab
+    private var itemsTab: some View {
+        VStack {
+            if vm.isLoadingItems && vm.itemsPosts.isEmpty {
+                ProgressView("Loading...")
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
+                        ForEach(vm.itemsPosts, id: \.id) { post in
+                            Text("Post: \(post.id ?? "unknown")")
+                                .frame(height: 150)
+                                .background(Color.green.opacity(0.3))
+                                .cornerRadius(6)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
     }
 }

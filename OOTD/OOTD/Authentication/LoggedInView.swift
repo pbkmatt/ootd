@@ -2,7 +2,7 @@ import SwiftUI
 
 struct LoggedInView: View {
     @State private var selectedTab: Int = 0
-    @State private var capturedImage: UIImage? = nil // State for captured image
+    @State private var capturedImage: UIImage? = nil // For captured image
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -27,15 +27,17 @@ struct LoggedInView: View {
                 }
                 .tag(2)
 
-            // Notifications
-            NotificationsView()
-                .tabItem {
-                    Image(systemName: "bell.fill")
-                }
-                .tag(3)
+            // CLOSET (replacing Notifications!)
+            NavigationView {
+                ClosetsView()
+            }
+            .tabItem {
+                Text("🧥") // or "👚", or "hanger" text, or a custom SFSymbol if you have one
+            }
+            .tag(3)
 
             // Profile
-            NavigationView { // Add NavigationView here
+            NavigationView {
                 UserProfileView()
             }
             .tabItem {
