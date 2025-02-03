@@ -3,7 +3,6 @@ import FirebaseFirestore
 import FirebaseAuth
 import PhotosUI
 
-// An enum for the user’s post filter choice
 enum ProfilePostFilter: String, CaseIterable {
     case today       = "today"
     case last7days   = "last7days"

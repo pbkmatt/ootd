@@ -12,40 +12,45 @@ struct SignUpView: View {
     var body: some View {
         VStack(spacing: 16) {
             Text("Create an Account")
-                .font(Font.custom("BebasNeue-Regular", size: 24))
+                .font(.custom("BebasNeue-Regular", size: 24))
                 .padding(.top, 40)
 
+            // Email
             TextField("Email", text: $email)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .keyboardType(.emailAddress)
                 .autocapitalization(.none)
                 .padding(.horizontal)
 
+            // Password
             SecureField("Password", text: $password)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
 
+            // Confirm
             SecureField("Confirm Password", text: $confirmPassword)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
 
+            // "Next" to go to Profile Setup
             Button("Next") {
                 guard password == confirmPassword else {
                     errorMessage = "Passwords do not match."
                     return
                 }
-
-                authViewModel.checkEmailAvailability(email: email) { isAvailable, error in
-                    if isAvailable {
-                        authViewModel.currentEmail = email
-                        navigateToProfileSetup = true
+                authViewModel.checkEmailAvailability(email: email) { isAvailable, errString in
+                    if let err = errString {
+                        errorMessage = err
+                    } else if !isAvailable {
+                        errorMessage = "Email is already in use."
                     } else {
-                        errorMessage = error
+                        authViewModel.currentEmail = email
+                        authViewModel.currentPassword = password
+                        navigateToProfileSetup = true
                     }
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
             .background(Color.blue)
             .foregroundColor(.white)
             .cornerRadius(10)
@@ -54,14 +59,18 @@ struct SignUpView: View {
             if let errorMessage = errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
-                    .font(Font.custom("OpenSans", size: 14))
-                    .padding(.top)
+                    .font(.custom("OpenSans", size: 14))
+                    .padding(.top, 8)
             }
+
+            Spacer()
         }
         .padding()
         .background(Color(.systemBackground).ignoresSafeArea())
         .fullScreenCover(isPresented: $navigateToProfileSetup) {
-            ProfileSetupView(password: password).environmentObject(authViewModel)
+            // We present ProfileSetupView to finalize the user doc
+            ProfileSetupView(password: password)
+                .environmentObject(authViewModel)
         }
     }
 }

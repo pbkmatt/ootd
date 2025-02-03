@@ -2,11 +2,11 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileSetupView: View {
-    let password: String // Passed from SignUpView
+    let password: String
 
     @State private var fullName: String = ""
     @State private var username: String = ""
-    @State private var bio: String = "" // ✅ New bio field
+    @State private var bio: String = ""
     @State private var instagramHandle: String = ""
     @State private var profileImage: UIImage? = nil
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
@@ -19,28 +19,31 @@ struct ProfileSetupView: View {
     var body: some View {
         VStack(spacing: 16) {
             Text("Set Up Your Profile")
-                .font(Font.custom("BebasNeue-Regular", size: 24))
+                .font(.custom("BebasNeue-Regular", size: 24))
                 .padding(.top, 40)
 
+            // Show email or phone if present
             if !authViewModel.currentEmail.isEmpty {
-                TextField("E-Mail", text: .constant(authViewModel.currentEmail))
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                TextField("", text: .constant(authViewModel.currentEmail))
                     .disabled(true)
                     .padding()
                     .background(Color.gray.opacity(0.3))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
             }
             if !authViewModel.currentPhone.isEmpty {
-                TextField("Phone Number", text: .constant(authViewModel.currentPhone))
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                TextField("", text: .constant(authViewModel.currentPhone))
                     .disabled(true)
                     .padding()
                     .background(Color.gray.opacity(0.3))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
             }
 
-            // Profile Picture Picker
-            PhotosPicker(selection: $selectedPhotoItem, matching: .images, photoLibrary: .shared()) {
-                if let profileImage = profileImage {
-                    Image(uiImage: profileImage)
+            // Choose Profile Picture
+            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                if let image = profileImage {
+                    Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
                         .frame(width: 120, height: 120)
@@ -58,7 +61,7 @@ struct ProfileSetupView: View {
                 loadProfileImage()
             }
 
-            // Full Name Field
+            // Full Name
             TextField("Full Name", text: $fullName)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.words)
@@ -67,7 +70,7 @@ struct ProfileSetupView: View {
                     fullName = validateFullName(newValue)
                 }
 
-            // Username Field
+            // Username
             TextField("Username", text: $username)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.none)
@@ -76,8 +79,8 @@ struct ProfileSetupView: View {
                     username = validateUsername(newValue)
                 }
 
-            // Bio Field
-            TextField("Bio (Optional, max 80 characters)", text: $bio)
+            // Bio
+            TextField("Bio (Optional, max 80 chars)", text: $bio)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.sentences)
                 .padding(.horizontal)
@@ -85,19 +88,18 @@ struct ProfileSetupView: View {
                     bio = validateBio(newValue)
                 }
 
-            // Instagram Handle Field
+            // Instagram Handle
             TextField("Instagram Handle (Optional)", text: $instagramHandle)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.none)
                 .padding(.horizontal)
 
-            // Create Account Button
+            // "Create Account"
             Button("Create Account") {
-                validateAndSubmit()
+                submitProfile()
             }
             .disabled(isCreatingAccount)
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
             .background(isCreatingAccount ? Color.gray : Color.blue)
             .foregroundColor(.white)
             .cornerRadius(10)
@@ -106,8 +108,8 @@ struct ProfileSetupView: View {
             if let errorMessage = errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
-                    .font(Font.custom("OpenSans", size: 14))
-                    .padding(.top)
+                    .font(.custom("OpenSans", size: 14))
+                    .padding(.top, 4)
             }
 
             Spacer()
@@ -115,12 +117,33 @@ struct ProfileSetupView: View {
         .background(Color(.systemBackground).ignoresSafeArea())
     }
 
-    // MARK: - Validate and Submit
-    private func validateAndSubmit() {
-        errorMessage = nil
+    // MARK: - Load Photo
+    private func loadProfileImage() {
+        guard let selectedPhotoItem else { return }
+        selectedPhotoItem.loadTransferable(type: Data.self) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let data?):
+                    if let uiImage = UIImage(data: data) {
+                        profileImage = uiImage
+                    }
+                case .failure(let error):
+                    errorMessage = "Error loading image: \(error.localizedDescription)"
+                default:
+                    break
+                }
+            }
+        }
+    }
 
-        guard !fullName.isEmpty, !username.isEmpty, profileImage != nil else {
-            errorMessage = "All required fields must be filled out."
+    // MARK: - Create Account in Firestore
+    private func submitProfile() {
+        errorMessage = nil
+        // Check required fields
+        guard !fullName.isEmpty,
+              !username.isEmpty,
+              profileImage != nil else {
+            errorMessage = "All required fields must be filled."
             return
         }
 
@@ -128,7 +151,7 @@ struct ProfileSetupView: View {
         authViewModel.createUserAfterProfileSetup(
             fullName: fullName,
             username: username,
-            bio: bio, // ✅ Include bio in Firestore
+            bio: bio,
             instagramHandle: instagramHandle,
             profileImage: profileImage,
             password: password
@@ -137,46 +160,23 @@ struct ProfileSetupView: View {
                 errorMessage = error
                 isCreatingAccount = false
             } else {
-                // Directly set isAuthenticated to true to navigate to LoggedInView
-                DispatchQueue.main.async {
-                    authViewModel.isAuthenticated = true
-                }
+                // On success, isAuthenticated is set in the viewModel
             }
         }
     }
 
-    // MARK: - Load Profile Image
-    private func loadProfileImage() {
-        guard let selectedPhotoItem else { return }
-        selectedPhotoItem.loadTransferable(type: Data.self) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let imageData?):
-                    if let image = UIImage(data: imageData) {
-                        self.profileImage = image
-                    }
-                case .failure(let error):
-                    self.errorMessage = "Error loading image: \(error.localizedDescription)"
-                default:
-                    break
-                }
-            }
-        }
-    }
-
-    // MARK: - Input Validation
+    // MARK: - Validation
     private func validateFullName(_ name: String) -> String {
-        let allowedCharacters = CharacterSet.letters
+        let allowed = CharacterSet.letters
             .union(.decimalDigits)
-            .union(CharacterSet(charactersIn: "-' "))
-
-        let filtered = name.unicodeScalars.filter { allowedCharacters.contains($0) }
+            .union(CharacterSet(charactersIn: " -'"))
+        let filtered = name.unicodeScalars.filter { allowed.contains($0) }
         return String(filtered.prefix(40))
     }
 
     private func validateUsername(_ name: String) -> String {
-        let allowedCharacters = CharacterSet.letters.union(.decimalDigits)
-        let filtered = name.unicodeScalars.filter { allowedCharacters.contains($0) }
+        let allowed = CharacterSet.letters.union(.decimalDigits)
+        let filtered = name.unicodeScalars.filter { allowed.contains($0) }
         return String(filtered.prefix(20))
     }
 

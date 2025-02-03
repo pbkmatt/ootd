@@ -13,10 +13,10 @@ struct LoginView: View {
     var body: some View {
         VStack(spacing: 16) {
             Text("Log In")
-                .font(Font.custom("BebasNeue-Regular", size: 32))
+                .font(.custom("BebasNeue-Regular", size: 32))
                 .padding(.top, 40)
 
-            // Segmented Control for Auth Method
+            // Segmented control: Email & Password vs. Phone
             Picker("Login Method", selection: $isUsingPhoneAuth) {
                 Text("Email & Password").tag(false)
                 Text("Phone Number").tag(true)
@@ -24,13 +24,15 @@ struct LoginView: View {
             .pickerStyle(SegmentedPickerStyle())
             .padding(.horizontal)
 
-            // Email or Phone Input
-            TextField(isUsingPhoneAuth ? "Phone Number" : "Email", text: $emailOrPhone)
+            // Text Field
+            TextField(isUsingPhoneAuth ? "Phone Number" : "Email",
+                      text: $emailOrPhone)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .keyboardType(isUsingPhoneAuth ? .phonePad : .emailAddress)
                 .autocapitalization(.none)
                 .padding(.horizontal)
 
+            // If phone auth, show phone flow. Else, show email password flow
             if isUsingPhoneAuth {
                 phoneAuthSection
             } else {
@@ -40,25 +42,32 @@ struct LoginView: View {
             if let errorMessage = errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
-                    .font(Font.custom("OpenSans", size: 14))
+                    .font(.custom("OpenSans", size: 14))
                     .padding(.top)
             }
+
+            Spacer()
         }
         .padding()
         .background(Color(.systemBackground).ignoresSafeArea())
         .onAppear {
-            errorMessage = nil // Reset errors on view appear
+            errorMessage = nil
         }
+        // If the user is now considered "authenticated," show either
+        // ProfileSetupView or your main "LoggedInView".
         .fullScreenCover(isPresented: $authViewModel.isAuthenticated) {
             if authViewModel.needsProfileSetup {
-                ProfileSetupView(password: password).environmentObject(authViewModel)
+                ProfileSetupView(password: "")
+                    .environmentObject(authViewModel)
             } else {
-                LoggedInView().environmentObject(authViewModel)
+                // Must define your main logged-in screen:
+                LoggedInView()
+                    .environmentObject(authViewModel)
             }
         }
     }
 
-    // MARK: - Phone Authentication Section
+    // MARK: - Phone Auth Section
     private var phoneAuthSection: some View {
         VStack {
             if isVerificationSent {
@@ -71,7 +80,6 @@ struct LoginView: View {
                     verifyPhoneCode()
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 50)
                 .background(Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(10)
@@ -81,7 +89,6 @@ struct LoginView: View {
                     sendVerificationCode()
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 50)
                 .background(Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(10)
@@ -90,7 +97,7 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - Email Authentication Section
+    // MARK: - Email Auth Section
     private var emailAuthSection: some View {
         VStack {
             SecureField("Password", text: $password)
@@ -101,7 +108,6 @@ struct LoginView: View {
                 loginWithEmail()
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
             .background(Color.green)
             .foregroundColor(.white)
             .cornerRadius(10)
@@ -109,9 +115,9 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - Authentication Functions
+    // MARK: - Phone Auth Functions
     private func sendVerificationCode() {
-        authViewModel.sendVerificationCode(phoneNumber: self.emailOrPhone) { error in
+        authViewModel.sendVerificationCode(phoneNumber: emailOrPhone) { error in
             if let error = error {
                 errorMessage = error
             } else {
@@ -121,15 +127,17 @@ struct LoginView: View {
     }
 
     private func verifyPhoneCode() {
-        authViewModel.verifyCode(code: self.verificationCode) { error in
+        authViewModel.verifyCode(code: verificationCode) { error in
             if let error = error {
                 errorMessage = error
             }
+            // Once successful, the Auth state listener triggers .isAuthenticated
         }
     }
 
+    // MARK: - Email Auth
     private func loginWithEmail() {
-        authViewModel.logInWithEmail(email: emailOrPhone, password: password) { error in
+        authViewModel.loginWithEmail(email: emailOrPhone, password: password) { error in
             if let error = error {
                 errorMessage = error
             }

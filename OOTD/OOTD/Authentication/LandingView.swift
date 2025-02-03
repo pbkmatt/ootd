@@ -7,45 +7,52 @@ struct LandingView: View {
         NavigationView {
             VStack(spacing: 20) {
                 Text("Welcome to OOTD")
-                    .font(Font.custom("BebasNeue-Regular", size: 32))
+                    .font(.custom("BebasNeue-Regular", size: 32))
                     .padding(.top, 40)
 
+                // MARK: - Sign Up Navigation
                 NavigationLink(destination: SignUpView().environmentObject(authViewModel)) {
                     Text("Sign Up")
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
                         .background(Color.blue)
                         .foregroundColor(.white)
-                        .font(Font.custom("BebasNeue-Regular", size: 18))
+                        .font(.custom("BebasNeue-Regular", size: 18))
                         .cornerRadius(10)
                         .padding(.horizontal, 40)
                 }
 
+                // MARK: - Log In Navigation
                 NavigationLink(destination: LoginView().environmentObject(authViewModel)) {
                     Text("Log In")
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
                         .background(Color.green)
                         .foregroundColor(.white)
-                        .font(Font.custom("BebasNeue-Regular", size: 18))
+                        .font(.custom("BebasNeue-Regular", size: 18))
                         .cornerRadius(10)
                         .padding(.horizontal, 40)
                 }
+
+                Spacer()
             }
             .background(Color(.systemBackground).ignoresSafeArea())
-            .fullScreenCover(isPresented: Binding(
-                get: { authViewModel.isAuthenticated },
-                set: { _ in authViewModel.checkAuthState() } // Ensure proper state checking
-            )) {
-                if authViewModel.needsProfileSetup {
-                    ProfileSetupView(password: authViewModel.currentPassword).environmentObject(authViewModel)
-                } else {
-                    LoggedInView().environmentObject(authViewModel)
-                }
+        }
+        // MARK: - Single Full Screen Cover
+        .fullScreenCover(isPresented: $authViewModel.isAuthenticated) {
+            // If user doc is incomplete, show ProfileSetupView; else LoggedInView
+            if authViewModel.needsProfileSetup {
+                ProfileSetupView(password: authViewModel.currentPassword)
+                    .environmentObject(authViewModel)
+            } else {
+                // The main screen after user is logged in
+                LoggedInView()
+                    .environmentObject(authViewModel)
             }
         }
         .onAppear {
-            authViewModel.checkAuthState() // Ensure authentication state is always updated
+            // Ensure we always update auth state when this view appears
+            authViewModel.checkAuthState()
         }
     }
 }

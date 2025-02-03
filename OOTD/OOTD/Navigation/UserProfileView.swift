@@ -15,7 +15,6 @@ struct UserProfileView: View {
     @State private var isLoading: Bool = true
     @State private var errorMessage: String?
 
-    // We'll store the filter to apply
     @State private var profileFilter: ProfilePostFilter = .all
 
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -24,6 +23,23 @@ struct UserProfileView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Buttons at the top of the screen
+            HStack(spacing: 16) {
+                Spacer()
+                Button("Edit Profile") {
+                    isSettingsViewPresented = true
+                }
+                .font(.custom("BebasNeue-Regular", size: 14))
+
+                Button(action: signOut) {
+                    Text("Sign Out")
+                        .font(.custom("BebasNeue-Regular", size: 14))
+                        .foregroundColor(.red)
+                }
+            }
+            .padding(.top)
+            .padding(.horizontal)
+
             if isLoading {
                 ProgressView("Loading Profile...")
                     .progressViewStyle(CircularProgressViewStyle(tint: .gray))
@@ -35,17 +51,24 @@ struct UserProfileView: View {
                         profileHeader
                         statsAndBio
 
-                        if let todaysOOTD = todaysOOTD {
+                        // Print out the 4 AM EST boundary for debugging
+                        Text("Debug: Today 4AM EST = \(Date.today4AMInEST())")
+                            .foregroundColor(.orange)
+                            .font(.footnote)
+
+                        // Show "Today's OOTD"
+                        if let post = todaysOOTD {
                             Text("Today's OOTD")
                                 .font(.custom("BebasNeue-Regular", size: 20))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.leading, 8)
 
-                            NavigationLink(destination: PostView(post: todaysOOTD)) {
-                                AsyncImage(url: URL(string: todaysOOTD.imageURL)) { image in
-                                    image.resizable()
-                                         .scaledToFit()
-                                         .cornerRadius(10)
+                            NavigationLink(destination: PostView(post: post)) {
+                                AsyncImage(url: URL(string: post.imageURL)) { image in
+                                    image
+                                        .resizable()
+                                        .scaledToFit()
+                                        .cornerRadius(10)
                                 } placeholder: {
                                     ProgressView()
                                 }
@@ -53,14 +76,14 @@ struct UserProfileView: View {
                             }
                         }
 
+                        // Show Past OOTDs
                         if !pastOOTDs.isEmpty {
                             VStack(alignment: .leading, spacing: 16) {
                                 Text("Past OOTDs")
                                     .font(.custom("BebasNeue-Regular", size: 20))
                                     .padding(.leading, 8)
 
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())],
-                                          spacing: 16) {
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                                     ForEach(pastOOTDs) { post in
                                         NavigationLink(destination: PostView(post: post)) {
                                             AsyncImage(url: URL(string: post.imageURL)) { image in
@@ -95,29 +118,12 @@ struct UserProfileView: View {
                 .transition(.opacity)
             }
         }
-        .background(Color(.systemBackground).ignoresSafeArea())
         .navigationTitle(username.isEmpty ? "Profile" : "@\(username)")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack {
-                    // Edit Profile Button
-                    Button("Edit Profile") {
-                        isSettingsViewPresented = true
-                    }
-                    .font(.custom("BebasNeue-Regular", size: 14))
-
-                    // Sign Out
-                    Button(action: signOut) {
-                        Text("Sign Out")
-                            .font(.custom("BebasNeue-Regular", size: 14))
-                            .foregroundColor(.red)
-                    }
-                }
-            }
-        }
+        .background(Color(.systemBackground).ignoresSafeArea())
         .sheet(isPresented: $isSettingsViewPresented) {
-            SettingsView().environmentObject(authViewModel)
+            SettingsView()
+                .environmentObject(authViewModel)
         }
         .onAppear {
             Task {
@@ -126,7 +132,7 @@ struct UserProfileView: View {
         }
     }
 
-    // MARK: - Async load
+    // MARK: - Load Profile + Posts
     private func loadProfileAndPosts() async {
         await fetchUserProfile()
         await fetchUserPosts()
@@ -164,8 +170,8 @@ struct UserProfileView: View {
             if !instagramHandle.isEmpty {
                 Link(instagramHandle,
                      destination: URL(string: "https://instagram.com/\(instagramHandle.replacingOccurrences(of: "@", with: ""))")!)
-                .font(.custom("BebasNeue-Regular", size: 16))
-                .underline()
+                    .font(.custom("BebasNeue-Regular", size: 16))
+                    .underline()
             }
         }
     }
@@ -230,14 +236,12 @@ struct UserProfileView: View {
                     self.followingCount = data["followingCount"] as? Int ?? 0
                     self.instagramHandle = data["instagramHandle"] as? String ?? ""
 
-                    // Read filter
                     if let filterStr = data["profilePostFilter"] as? String,
                        let filter = ProfilePostFilter(rawValue: filterStr) {
                         self.profileFilter = filter
                     } else {
                         self.profileFilter = .all
                     }
-
                     self.isLoading = false
                 }
             }
@@ -263,19 +267,43 @@ struct UserProfileView: View {
                 .getDocuments()
 
             let posts = snapshot.documents.compactMap { doc -> OOTDPost? in
-                try? doc.data(as: OOTDPost.self)
-            }
-
-            DispatchQueue.main.async {
-                let filtered = self.applyProfileFilter(posts)
-                // Separate today's OOTD from the rest (based on 4 AM or standard day)
-                let now = Date()
-                let today4AM = Date.today4AMInEST()
-
-                self.todaysOOTD = filtered.first(where: { $0.timestamp.dateValue() >= today4AM })
-                self.pastOOTDs = filtered.filter {
-                    $0.timestamp.dateValue() < today4AM
+                let post = try? doc.data(as: OOTDPost.self)
+                if let p = post {
+                    // Debug print: each post doc ID + timestamp
+                    print("🔎 Post docID: \(p.id ?? "nil"), timestamp(UTC): \(p.timestamp.dateValue())")
                 }
+                return post
+            }
+            
+            // Print the boundary for debug
+            let boundary = Date.today4AMInEST()
+            print("🕓 4 AM EST boundary: \(boundary)")
+            
+            DispatchQueue.main.async {
+                // Filter
+                let filtered = self.applyProfileFilter(posts)
+                
+                // "Today's" = any post after boundary
+                self.todaysOOTD = filtered.first(where: {
+                    let ts = $0.timestamp.dateValue()
+                    print("🔎 Checking postID: \($0.id ?? "nil"), date=\(ts)")
+                    return ts >= boundary
+                })
+                
+                if let t = self.todaysOOTD {
+                    print("✅ Found today's OOTD: \(t.id ?? "nil")")
+                } else {
+                    print("🛑 No today's OOTD matched. Possibly all < 4 AM boundary or no posts exist.")
+                }
+
+                // Past = < boundary
+                self.pastOOTDs = filtered.filter { $0.timestamp.dateValue() < boundary }
+                if !self.pastOOTDs.isEmpty {
+                    print("🗂 Past OOTDs count: \(self.pastOOTDs.count)")
+                } else {
+                    print("🗂 No past OOTDs either.")
+                }
+
                 self.isLoading = false
             }
         } catch {
@@ -290,15 +318,15 @@ struct UserProfileView: View {
     private func applyProfileFilter(_ posts: [OOTDPost]) -> [OOTDPost] {
         switch profileFilter {
         case .today:
-            // Only show posts timestamp >= today's 4 AM
             let boundary = Date.today4AMInEST()
+            print("🤔 Filter = .today, boundary: \(boundary)")
             return posts.filter { $0.timestamp.dateValue() >= boundary }
-
         case .last7days:
             let boundary = Date.daysAgo4AMInEST(7)
+            print("🤔 Filter = .last7days, boundary: \(boundary)")
             return posts.filter { $0.timestamp.dateValue() >= boundary }
-
         case .all:
+            print("🤔 Filter = .all, no boundary used.")
             return posts
         }
     }

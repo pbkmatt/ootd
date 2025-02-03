@@ -9,8 +9,8 @@
 import SwiftUI
 
 struct RecommendedUserBanner: View {
-    let user: UserModel  // we "hacked" user.bio to store mutual count in the VM above. 
-                         // In a real app, you'd pass the mutual count as a separate property
+    let user: UserModel  // hacked user.bio
+                         // pass mutual as sep prop
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
