@@ -5,122 +5,125 @@ import FirebaseFirestore
 class FollowService {
     static let shared = FollowService()
     private init() {}
-    
+
     private let db = Firestore.firestore()
-    
-    // Follow a user: create a doc in targetUserId's followers subcollection
+
+    // MARK: - Follow a user
     func followUser(targetUserId: String, completion: @escaping (Error?) -> Void) {
         guard let currentUserId = Auth.auth().currentUser?.uid,
               currentUserId != targetUserId else {
             completion(nil)
             return
         }
-        
-        let followerDoc = db.collection("users")
+
+        // 1) Add doc in "targetUserId/followers/currentUserId"
+        db.collection("users")
             .document(targetUserId)
             .collection("followers")
             .document(currentUserId)
-        
-        followerDoc.setData(["followedAt": Timestamp()]) { error in
-            completion(error)
-        }
+            .setData(["followedAt": FieldValue.serverTimestamp()]) { error in
+
+                if let error = error {
+                    completion(error)
+                    return
+                }
+                // 2) Add doc in "currentUserId/following/targetUserId"
+                self.db.collection("users")
+                    .document(currentUserId)
+                    .collection("following")
+                    .document(targetUserId)
+                    .setData(["followedAt": FieldValue.serverTimestamp()]) { err2 in
+
+                        if let err2 = err2 {
+                            completion(err2)
+                            return
+                        }
+                        // 3) Increment counters
+                        self.incrementFollowCounts(targetUserId: targetUserId,
+                                                   currentUserId: currentUserId) { err3 in
+                            completion(err3)
+                        }
+                    }
+            }
     }
-    
-    // Unfollow a user: remove that doc
+
+    // MARK: - Unfollow a user
     func unfollowUser(targetUserId: String, completion: @escaping (Error?) -> Void) {
         guard let currentUserId = Auth.auth().currentUser?.uid else {
             completion(nil)
             return
         }
-        
-        let followerDoc = db.collection("users")
+
+        // 1) Remove doc in "targetUserId/followers/currentUserId"
+        db.collection("users")
             .document(targetUserId)
             .collection("followers")
             .document(currentUserId)
-        
-        followerDoc.delete { error in
-            completion(error)
-        }
+            .delete { error in
+
+                if let error = error {
+                    completion(error)
+                    return
+                }
+                // 2) Remove doc in "currentUserId/following/targetUserId"
+                self.db.collection("users")
+                    .document(currentUserId)
+                    .collection("following")
+                    .document(targetUserId)
+                    .delete { err2 in
+
+                        if let err2 = err2 {
+                            completion(err2)
+                            return
+                        }
+                        // 3) Decrement counters
+                        self.decrementFollowCounts(targetUserId: targetUserId,
+                                                   currentUserId: currentUserId) { err3 in
+                            completion(err3)
+                        }
+                    }
+            }
     }
-    
-    // Check if current user is following
+
+    // MARK: - Check if current user is following target
     func isFollowing(targetUserId: String, completion: @escaping (Bool) -> Void) {
         guard let currentUserId = Auth.auth().currentUser?.uid else {
             completion(false)
             return
         }
-        
-        let followerDoc = db.collection("users")
-            .document(targetUserId)
-            .collection("followers")
+
+        db.collection("users")
             .document(currentUserId)
-        
-        followerDoc.getDocument { snapshot, error in
-            if let error = error {
-                print("Error checking follow status: \(error)")
-                completion(false)
-            } else {
-                completion(snapshot?.exists == true)
+            .collection("following")
+            .document(targetUserId)
+            .getDocument { snapshot, error in
+                if let error = error {
+                    print("Error checking follow status: \(error)")
+                    completion(false)
+                } else {
+                    completion(snapshot?.exists == true)
+                }
             }
-        }
     }
-    
-    // Return a list of user IDs that the current user (myUid) is following
-    // i.e., "myUid" is in their followers subcollection
-    func fetchUsersIAmFollowing(completion: @escaping ([String]) -> Void) {
-        guard let currentUserId = Auth.auth().currentUser?.uid else {
-            completion([])
-            return
-        }
-        
-        let db = Firestore.firestore()
-        
-        // Because we only store a subcollection "followers" under each user,
-        // we must scan all user docs to see which ones contain the current user as a follower doc.
-        // That's extremely inefficient at scale.
-        // A typical approach is to have a "following" subcollection under me as well.
-        // But here's a naive approach:
-        db.collection("users").getDocuments { snapshot, error in
-            if let error = error {
-                print("Error fetching users for following check: \(error)")
-                completion([])
-                return
+
+    // MARK: - Fetch who I am following
+    func fetchFollowing(currentUserId: String, completion: @escaping ([String]) -> Void) {
+        db.collection("users")
+            .document(currentUserId)
+            .collection("following")
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching following: \(error)")
+                    completion([])
+                    return
+                }
+                let userIds = snapshot?.documents.map { $0.documentID } ?? []
+                completion(userIds)
             }
-            guard let docs = snapshot?.documents else {
-                completion([])
-                return
-            }
-            
-            // We'll gather userIDs where subcollection contains doc of currentUserId
-            let group = DispatchGroup()
-            var followingIds = [String]()
-            
-            for doc in docs {
-                let userId = doc.documentID
-                if userId == currentUserId { continue } // skip self
-                
-                group.enter()
-                db.collection("users")
-                    .document(userId)
-                    .collection("followers")
-                    .document(currentUserId)
-                    .getDocument { followerSnap, err in
-                        if err == nil, followerSnap?.exists == true {
-                            // That means I follow this user
-                            followingIds.append(userId)
-                        }
-                        group.leave()
-                    }
-            }
-            
-            group.notify(queue: .main) {
-                completion(followingIds)
-            }
-        }
     }
-    
-    // Return all followers of a given user
-    func fetchFollowers(ofUser userId: String, completion: @escaping ([String]) -> Void) {
+
+    // MARK: - Fetch my followers
+    func fetchFollowers(forUserId userId: String, completion: @escaping ([String]) -> Void) {
         db.collection("users")
             .document(userId)
             .collection("followers")
@@ -133,5 +136,34 @@ class FollowService {
                 let followerIds = snapshot?.documents.map { $0.documentID } ?? []
                 completion(followerIds)
             }
+    }
+
+    // MARK: - Private Helpers
+    private func incrementFollowCounts(targetUserId: String,
+                                       currentUserId: String,
+                                       completion: @escaping (Error?) -> Void) {
+        let batch = db.batch()
+
+        let targetRef = db.collection("users").document(targetUserId)
+        batch.updateData(["followersCount": FieldValue.increment(Int64(1))], forDocument: targetRef)
+
+        let currentRef = db.collection("users").document(currentUserId)
+        batch.updateData(["followingCount": FieldValue.increment(Int64(1))], forDocument: currentRef)
+
+        batch.commit(completion: completion)
+    }
+
+    private func decrementFollowCounts(targetUserId: String,
+                                       currentUserId: String,
+                                       completion: @escaping (Error?) -> Void) {
+        let batch = db.batch()
+
+        let targetRef = db.collection("users").document(targetUserId)
+        batch.updateData(["followersCount": FieldValue.increment(Int64(-1))], forDocument: targetRef)
+
+        let currentRef = db.collection("users").document(currentUserId)
+        batch.updateData(["followingCount": FieldValue.increment(Int64(-1))], forDocument: currentRef)
+
+        batch.commit(completion: completion)
     }
 }

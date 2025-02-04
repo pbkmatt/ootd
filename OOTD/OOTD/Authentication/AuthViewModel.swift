@@ -136,7 +136,7 @@ class AuthViewModel: ObservableObject {
         password: String,
         completion: @escaping (String?) -> Void
     ) {
-        // 1) Create user in Firebase Auth
+        // Step 1: Create user in Firebase Auth
         Auth.auth().createUser(withEmail: currentEmail, password: password) { result, error in
             if let error = error {
                 completion("Error creating user: \(error.localizedDescription)")
@@ -148,9 +148,9 @@ class AuthViewModel: ObservableObject {
             }
             let uid = firebaseUser.uid
 
-            // 2) Upload profile image if any
+            // Step 2: Upload profile image if any
             self.uploadProfileImage(profileImage: profileImage, uid: uid) { imageURL in
-                // 3) Build user data
+                // Step 3: Store user data in Firestore
                 let userData: [String: Any] = [
                     "fullName": fullName,
                     "username": username.lowercased(),
@@ -158,14 +158,13 @@ class AuthViewModel: ObservableObject {
                     "instagramHandle": instagramHandle,
                     "profilePictureURL": imageURL ?? "",
                     "email": self.currentEmail,
-                    "createdAt": FieldValue.serverTimestamp(), // <--- store timestamp
+                    "createdAt": FieldValue.serverTimestamp(),
                     "followersCount": 0,
                     "followingCount": 0,
                     "isPrivateProfile": false,
                     "uid": uid
                 ]
 
-                // 4) Save doc with the same Auth UID
                 self.db.collection("users").document(uid).setData(userData) { err in
                     if let err = err {
                         completion("Error saving user data: \(err.localizedDescription)")
@@ -181,20 +180,6 @@ class AuthViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Login With Email
-    func logInWithEmail(email: String, password: String, completion: @escaping (String?) -> Void) {
-        Auth.auth().signIn(withEmail: email, password: password) { _, error in
-            if let error = error {
-                completion(error.localizedDescription)
-                return
-            }
-            // If success => Auth state changes => checkAuthState triggers fetch
-            DispatchQueue.main.async {
-                self.currentEmail = email
-            }
-            completion(nil)
-        }
-    }
 
     // MARK: - Phone Auth
     func sendVerificationCode(phoneNumber: String, completion: @escaping (String?) -> Void) {
@@ -289,4 +274,19 @@ class AuthViewModel: ObservableObject {
             }
         }
     }
+    
+    func logInWithEmail(email: String, password: String, completion: @escaping (String?) -> Void) {
+        Auth.auth().signIn(withEmail: email, password: password) { _, error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                DispatchQueue.main.async {
+                    self.currentEmail = email
+                    self.isAuthenticated = true
+                }
+                completion(nil)
+            }
+        }
+    }
+
 }

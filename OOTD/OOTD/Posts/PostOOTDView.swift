@@ -229,7 +229,8 @@ struct PostOOTDView: View {
             "timestamp": Timestamp(),
             "visibility": "public",
             "commentsCount": 0,
-            "favoritesCount": 0
+            "favoritesCount": 0,
+            "closetsCount": 0
         ]
 
         db.collection("posts").addDocument(data: postData) { error in

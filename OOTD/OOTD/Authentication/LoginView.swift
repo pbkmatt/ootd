@@ -9,6 +9,7 @@ struct LoginView: View {
     @State private var errorMessage: String?
 
     @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(\.dismiss) private var dismiss // To pop back to LandingView after login
 
     var body: some View {
         VStack(spacing: 16) {
@@ -24,15 +25,14 @@ struct LoginView: View {
             .pickerStyle(SegmentedPickerStyle())
             .padding(.horizontal)
 
-            // Text Field
-            TextField(isUsingPhoneAuth ? "Phone Number" : "Email",
-                      text: $emailOrPhone)
+            // Email/Phone Input
+            TextField(isUsingPhoneAuth ? "Phone Number" : "Email", text: $emailOrPhone)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .keyboardType(isUsingPhoneAuth ? .phonePad : .emailAddress)
                 .autocapitalization(.none)
                 .padding(.horizontal)
 
-            // If phone auth, show phone flow. Else, show email password flow
+            // Show either phone verification or password login
             if isUsingPhoneAuth {
                 phoneAuthSection
             } else {
@@ -52,18 +52,6 @@ struct LoginView: View {
         .background(Color(.systemBackground).ignoresSafeArea())
         .onAppear {
             errorMessage = nil
-        }
-        // If the user is now considered "authenticated," show either
-        // ProfileSetupView or your main "LoggedInView".
-        .fullScreenCover(isPresented: $authViewModel.isAuthenticated) {
-            if authViewModel.needsProfileSetup {
-                ProfileSetupView(password: "")
-                    .environmentObject(authViewModel)
-            } else {
-                // Must define your main logged-in screen:
-                LoggedInView()
-                    .environmentObject(authViewModel)
-            }
         }
     }
 
@@ -105,7 +93,7 @@ struct LoginView: View {
                 .padding(.horizontal)
 
             Button("Log In") {
-                loginWithEmail()
+                logInWithEmail()
             }
             .frame(maxWidth: .infinity)
             .background(Color.green)
@@ -130,17 +118,28 @@ struct LoginView: View {
         authViewModel.verifyCode(code: verificationCode) { error in
             if let error = error {
                 errorMessage = error
+            } else {
+                handleSuccessfulLogin()
             }
-            // Once successful, the Auth state listener triggers .isAuthenticated
         }
     }
 
     // MARK: - Email Auth
-    private func loginWithEmail() {
-        authViewModel.loginWithEmail(email: emailOrPhone, password: password) { error in
+    private func logInWithEmail() {
+        authViewModel.logInWithEmail(email: emailOrPhone, password: password) { error in
             if let error = error {
-                errorMessage = error
+                self.errorMessage = error
+            } else {
+                handleSuccessfulLogin()
             }
+        }
+    }
+
+    // MARK: - Handle Login Success
+    private func handleSuccessfulLogin() {
+        // Add a short delay to prevent UI clashes before navigating away
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            dismiss()
         }
     }
 }

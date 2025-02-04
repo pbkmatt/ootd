@@ -1,5 +1,8 @@
 import SwiftUI
-import PhotosUI
+import _PhotosUI_SwiftUI
+import Firebase
+import FirebaseFirestore
+import FirebaseAuth
 
 struct ProfileSetupView: View {
     let password: String
@@ -15,6 +18,7 @@ struct ProfileSetupView: View {
     @State private var isCreatingAccount = false
 
     @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(\.dismiss) private var dismiss  // ✅ Use dismiss() to close the view properly
 
     var body: some View {
         VStack(spacing: 16) {
@@ -22,7 +26,7 @@ struct ProfileSetupView: View {
                 .font(.custom("BebasNeue-Regular", size: 24))
                 .padding(.top, 40)
 
-            // Show email or phone if present
+            // Show email or phone if present (they're disabled here)
             if !authViewModel.currentEmail.isEmpty {
                 TextField("", text: .constant(authViewModel.currentEmail))
                     .disabled(true)
@@ -40,7 +44,7 @@ struct ProfileSetupView: View {
                     .padding(.horizontal)
             }
 
-            // Choose Profile Picture
+            // Profile Image Picker
             PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                 if let image = profileImage {
                     Image(uiImage: image)
@@ -66,27 +70,18 @@ struct ProfileSetupView: View {
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.words)
                 .padding(.horizontal)
-                .onChange(of: fullName) { newValue in
-                    fullName = validateFullName(newValue)
-                }
 
             // Username
             TextField("Username", text: $username)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.none)
                 .padding(.horizontal)
-                .onChange(of: username) { newValue in
-                    username = validateUsername(newValue)
-                }
 
             // Bio
             TextField("Bio (Optional, max 80 chars)", text: $bio)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .autocapitalization(.sentences)
                 .padding(.horizontal)
-                .onChange(of: bio) { newValue in
-                    bio = validateBio(newValue)
-                }
 
             // Instagram Handle
             TextField("Instagram Handle (Optional)", text: $instagramHandle)
@@ -117,6 +112,37 @@ struct ProfileSetupView: View {
         .background(Color(.systemBackground).ignoresSafeArea())
     }
 
+    // MARK: - Create Account in Firestore
+    private func submitProfile() {
+        errorMessage = nil
+        guard !fullName.isEmpty,
+              !username.isEmpty,
+              profileImage != nil else {
+            errorMessage = "All required fields must be filled."
+            return
+        }
+
+        isCreatingAccount = true
+        authViewModel.createUserAfterProfileSetup(
+            fullName: fullName,
+            username: username,
+            bio: bio,
+            instagramHandle: instagramHandle,
+            profileImage: profileImage,
+            password: password
+        ) { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    self.errorMessage = error
+                    self.isCreatingAccount = false
+                } else {
+                    // ✅ Dismiss ProfileSetupView properly after successful creation
+                    dismiss()
+                }
+            }
+        }
+    }
+
     // MARK: - Load Photo
     private func loadProfileImage() {
         guard let selectedPhotoItem else { return }
@@ -134,53 +160,5 @@ struct ProfileSetupView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Create Account in Firestore
-    private func submitProfile() {
-        errorMessage = nil
-        // Check required fields
-        guard !fullName.isEmpty,
-              !username.isEmpty,
-              profileImage != nil else {
-            errorMessage = "All required fields must be filled."
-            return
-        }
-
-        isCreatingAccount = true
-        authViewModel.createUserAfterProfileSetup(
-            fullName: fullName,
-            username: username,
-            bio: bio,
-            instagramHandle: instagramHandle,
-            profileImage: profileImage,
-            password: password
-        ) { error in
-            if let error = error {
-                errorMessage = error
-                isCreatingAccount = false
-            } else {
-                // On success, isAuthenticated is set in the viewModel
-            }
-        }
-    }
-
-    // MARK: - Validation
-    private func validateFullName(_ name: String) -> String {
-        let allowed = CharacterSet.letters
-            .union(.decimalDigits)
-            .union(CharacterSet(charactersIn: " -'"))
-        let filtered = name.unicodeScalars.filter { allowed.contains($0) }
-        return String(filtered.prefix(40))
-    }
-
-    private func validateUsername(_ name: String) -> String {
-        let allowed = CharacterSet.letters.union(.decimalDigits)
-        let filtered = name.unicodeScalars.filter { allowed.contains($0) }
-        return String(filtered.prefix(20))
-    }
-
-    private func validateBio(_ text: String) -> String {
-        return String(text.prefix(80))
     }
 }

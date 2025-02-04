@@ -8,20 +8,26 @@ struct PostView: View {
     // Comments
     @State private var comments: [Comment] = []
     @State private var newComment = ""
-
+    
     // Favorites
     @State private var isFavorited = false
     @State private var favoriteCount: Int
-
+    
+    // Closet
+    @State private var isInCloset = false
+    @State private var closetsCount: Int
+    
     // Show the “tagged items” sheet
     @State private var showTaggedItemsSheet = false
-
-    // Show the “add to closet” sheet
+    
+    // Show the “add to closet” sheet (if you want a separate flow)
+    // or simply do the closet add inline. This code does it inline for clarity.
     @State private var isAddToClosetSheetPresented = false
-
+    
     init(post: OOTDPost) {
         self.post = post
         _favoriteCount = State(initialValue: post.favoritesCount)
+        _closetsCount = State(initialValue: post.closetsCount)
     }
 
     var body: some View {
@@ -52,27 +58,28 @@ struct PostView: View {
                     .foregroundColor(.gray)
 
                 // Comment
-                Button(action: {}) {
-                    Image(systemName: "bubble.right")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 22, height: 22)
-                        .foregroundColor(.gray)
-                }
+                Image(systemName: "bubble.right")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .foregroundColor(.gray)
                 Text("\(comments.count)")
                     .font(.subheadline)
                     .foregroundColor(.gray)
 
-                // Share (placeholder)
-                Button(action: {}) {
-                    Image(systemName: "paperplane")
+                // “Add to Closet” button
+                Button(action: toggleCloset) {
+                    Image(systemName: isInCloset ? "briefcase.fill" : "briefcase")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 22, height: 22)
                         .foregroundColor(.gray)
                 }
+                Text("\(closetsCount)")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
 
-                // Shopping Bag (tagged items)
+                // Show tagged items
                 if !post.taggedItems.isEmpty {
                     Button(action: {
                         showTaggedItemsSheet = true
@@ -83,17 +90,6 @@ struct PostView: View {
                             .frame(width: 22, height: 22)
                             .foregroundColor(.gray)
                     }
-                }
-
-                // Add to Closet
-                Button(action: {
-                    isAddToClosetSheetPresented = true
-                }) {
-                    Image(systemName: "plus")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 22, height: 22)
-                        .foregroundColor(.gray)
                 }
 
                 Spacer()
@@ -171,22 +167,16 @@ struct PostView: View {
         }
         .onAppear {
             loadComments()
-            checkFavoriteStatus(postID: post.id ?? "")
+            checkFavoriteStatus()
+            checkClosetStatus()
         }
         .navigationTitle("Post")
         .navigationBarTitleDisplayMode(.inline)
 
-        // MARK: - Tagged Items Sheet
+        // Tagged Items Sheet
         .sheet(isPresented: $showTaggedItemsSheet) {
-            // iOS 16 only: let the sheet appear as a “medium” and “large” detent
             TaggedItemsSheet(items: post.taggedItems)
                 .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
-
-        // MARK: - Add to Closet Sheet
-        .sheet(isPresented: $isAddToClosetSheetPresented) {
-            AddToClosetView(postId: post.id ?? "")
         }
     }
 
@@ -214,23 +204,27 @@ struct PostView: View {
     private func addComment() {
         guard !newComment.isEmpty,
               let uid = Auth.auth().currentUser?.uid,
-              let postId = post.id else { return }
+              let postId = post.id
+        else { return }
 
         let db = Firestore.firestore()
+        let postRef = db.collection("posts").document(postId)
+
+        // Fetch my user info to embed in the comment
         db.collection("users").document(uid).getDocument { document, error in
             if let error = error {
                 print("Error fetching user data: \(error.localizedDescription)")
                 return
             }
-            guard let data = document?.data(),
-                  let username = data["username"] as? String,
-                  let profileImage = data["profilePictureURL"] as? String
+            guard
+                let data = document?.data(),
+                let username = data["username"] as? String,
+                let profileImage = data["profilePictureURL"] as? String
             else { return }
 
-            let newCommentDoc = db.collection("posts")
-                                  .document(postId)
-                                  .collection("comments")
-                                  .document()
+            let newCommentDoc = postRef
+                .collection("comments")
+                .document()
 
             let commentData: [String: Any] = [
                 "userId": uid,
@@ -244,7 +238,7 @@ struct PostView: View {
                 if let error = error {
                     print("Error adding comment: \(error.localizedDescription)")
                 } else {
-                    // Insert the new comment locally
+                    // Update local UI immediately
                     let postedComment = Comment(
                         id: newCommentDoc.documentID,
                         userId: uid,
@@ -255,17 +249,25 @@ struct PostView: View {
                     )
                     self.comments.insert(postedComment, at: 0)
                     self.newComment = ""
+
+                    // Also increment the post’s commentsCount in Firestore
+                    postRef.updateData(["commentsCount": FieldValue.increment(Int64(1))])
                 }
             }
         }
     }
 
-    // MARK: - Check Favorite
-    private func checkFavoriteStatus(postID: String) {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+    // MARK: - Favorite
+    private func checkFavoriteStatus() {
+        guard let uid = Auth.auth().currentUser?.uid,
+              let postID = post.id
+        else { return }
+
         let db = Firestore.firestore()
-        db.collection("posts").document(postID)
-            .collection("favorites").document(uid)
+        db.collection("posts")
+            .document(postID)
+            .collection("favorites")
+            .document(uid)
             .getDocument { document, error in
                 if let error = error {
                     print("Error checking favorite status: \(error.localizedDescription)")
@@ -275,20 +277,22 @@ struct PostView: View {
             }
     }
 
-    // MARK: - Toggle Favorite
     private func toggleFavorite() {
         guard let uid = Auth.auth().currentUser?.uid,
-              let postID = post.id else { return }
+              let postID = post.id
+        else { return }
 
         let db = Firestore.firestore()
         let postRef = db.collection("posts").document(postID)
         let favoriteRef = postRef.collection("favorites").document(uid)
 
         if isFavorited {
+            // Unfavorite
             favoriteRef.delete()
             postRef.updateData(["favoritesCount": FieldValue.increment(Int64(-1))])
             favoriteCount -= 1
         } else {
+            // Favorite
             favoriteRef.setData(["favoritedAt": Timestamp()])
             postRef.updateData(["favoritesCount": FieldValue.increment(Int64(1))])
             favoriteCount += 1
@@ -296,9 +300,54 @@ struct PostView: View {
         isFavorited.toggle()
     }
 
+    // MARK: - Closet
+    private func checkClosetStatus() {
+        guard let uid = Auth.auth().currentUser?.uid,
+              let postID = post.id
+        else { return }
+
+        let db = Firestore.firestore()
+        db.collection("posts")
+            .document(postID)
+            .collection("closets")
+            .document(uid)
+            .getDocument { document, error in
+                if let error = error {
+                    print("Error checking closet status: \(error.localizedDescription)")
+                    return
+                }
+                self.isInCloset = document?.exists ?? false
+            }
+    }
+
+    private func toggleCloset() {
+        guard let uid = Auth.auth().currentUser?.uid,
+              let postID = post.id
+        else { return }
+
+        let db = Firestore.firestore()
+        let postRef = db.collection("posts").document(postID)
+        let closetRef = postRef.collection("closets").document(uid)
+
+        if isInCloset {
+            // Possibly remove from closet if that’s desired.
+            // If you want only "one-way add," remove this block.
+            closetRef.delete()
+            postRef.updateData(["closetsCount": FieldValue.increment(Int64(-1))])
+            closetsCount -= 1
+            isInCloset = false
+        } else {
+            // Add to closet
+            closetRef.setData(["addedAt": Timestamp()])
+            postRef.updateData(["closetsCount": FieldValue.increment(Int64(1))])
+            closetsCount += 1
+            isInCloset = true
+        }
+    }
+
     // MARK: - Navigation
     private func navigateToProfile(userId: String) {
-        // Show user’s profile
+        // Show user’s OtherProfileView or handle differently in your Nav stack
     }
 }
 
@@ -317,7 +366,7 @@ struct TaggedItemsSheet: View {
                         Text(item.name)
                     }
                 } else {
-                    // No link or invalid link -> plain text
+                    // No link or invalid -> plain text
                     Text(item.name)
                 }
             }

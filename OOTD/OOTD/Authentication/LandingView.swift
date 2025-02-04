@@ -4,7 +4,7 @@ struct LandingView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 Text("Welcome to OOTD")
                     .font(.custom("BebasNeue-Regular", size: 32))
@@ -38,20 +38,17 @@ struct LandingView: View {
             }
             .background(Color(.systemBackground).ignoresSafeArea())
         }
-        // MARK: - Single Full Screen Cover
+        // MARK: - Single Full Screen Cover to Handle Authentication
         .fullScreenCover(isPresented: $authViewModel.isAuthenticated) {
-            // If user doc is incomplete, show ProfileSetupView; else LoggedInView
             if authViewModel.needsProfileSetup {
                 ProfileSetupView(password: authViewModel.currentPassword)
                     .environmentObject(authViewModel)
             } else {
-                // The main screen after user is logged in
                 LoggedInView()
                     .environmentObject(authViewModel)
             }
         }
         .onAppear {
-            // Ensure we always update auth state when this view appears
             authViewModel.checkAuthState()
         }
     }

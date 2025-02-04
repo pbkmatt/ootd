@@ -27,23 +27,34 @@ struct SignUpView: View {
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
 
-            // Confirm
+            // Confirm Password
             SecureField("Confirm Password", text: $confirmPassword)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
 
-            // "Next" to go to Profile Setup
+            // "Next" -> goes to ProfileSetupView if validations pass
             Button("Next") {
+                // 1) Confirm both password fields match
                 guard password == confirmPassword else {
                     errorMessage = "Passwords do not match."
                     return
                 }
+                
+                // 2) Check if email is valid format
+                guard isValidEmail(email) else {
+                    errorMessage = "Invalid email format. Please try again."
+                    return
+                }
+
+                // 3) Check if email is available
                 authViewModel.checkEmailAvailability(email: email) { isAvailable, errString in
                     if let err = errString {
+                        // e.g., could not query Firestore, etc.
                         errorMessage = err
                     } else if !isAvailable {
                         errorMessage = "Email is already in use."
                     } else {
+                        // All good => proceed
                         authViewModel.currentEmail = email
                         authViewModel.currentPassword = password
                         navigateToProfileSetup = true
@@ -51,6 +62,7 @@ struct SignUpView: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            .padding()
             .background(Color.blue)
             .foregroundColor(.white)
             .cornerRadius(10)
@@ -67,10 +79,20 @@ struct SignUpView: View {
         }
         .padding()
         .background(Color(.systemBackground).ignoresSafeArea())
+        // Once validations pass, we move to ProfileSetupView
         .fullScreenCover(isPresented: $navigateToProfileSetup) {
-            // We present ProfileSetupView to finalize the user doc
             ProfileSetupView(password: password)
                 .environmentObject(authViewModel)
         }
+    }
+}
+
+// MARK: - Email Format Validation
+extension SignUpView {
+    private func isValidEmail(_ email: String) -> Bool {
+        // A simple, commonly used regex for demonstration.
+        // Adjust as needed for more advanced checks.
+        let emailRegex = #"^\S+@\S+\.\S+$"#
+        return email.range(of: emailRegex, options: .regularExpression) != nil
     }
 }

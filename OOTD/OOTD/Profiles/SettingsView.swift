@@ -15,10 +15,14 @@ struct SettingsView: View {
     @State private var instagramHandle: String = ""
     @State private var profileImage: UIImage? = nil
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var bio: String = ""
     @State private var errorMessage: String?
     @State private var isUpdating = false
 
-    // New: store the user’s selected filter
+    // Track original username to avoid unnecessary username conflicts
+    @State private var originalUsername: String = ""
+
+    // Store the user's selected post visibility filter
     @State private var selectedFilter: ProfilePostFilter = .all
 
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -57,9 +61,7 @@ struct SettingsView: View {
                 .autocapitalization(.words)
                 .padding(.horizontal)
                 .onChange(of: fullName) { newValue in
-                    if newValue.count > 40 {
-                        fullName = String(newValue.prefix(40))
-                    }
+                    fullName = String(newValue.prefix(40))
                 }
 
             // MARK: - Username Input
@@ -80,6 +82,15 @@ struct SettingsView: View {
                 .onChange(of: instagramHandle) { newValue in
                     let filtered = newValue.filter { $0.isLetter || $0.isNumber || $0 == "." || $0 == "_" }
                     instagramHandle = String(filtered.prefix(36))
+                }
+            
+            // MARK: - Bio Input
+            TextField("Bio", text: $bio)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .autocapitalization(.words)
+                .padding(.horizontal)
+                .onChange(of: bio) { newValue in
+                    bio = String(newValue.prefix(40))
                 }
 
             // MARK: - Post Filter Picker
@@ -151,13 +162,20 @@ struct SettingsView: View {
             errorMessage = "All required fields must be filled out."
             return
         }
+
         isUpdating = true
-        checkUsernameAvailability(username) { isAvailable in
-            if isAvailable {
-                saveProfileData()
-            } else {
-                errorMessage = "Username is already taken."
-                isUpdating = false
+
+        // If username is unchanged, skip checking availability
+        if username == originalUsername {
+            saveProfileData()
+        } else {
+            checkUsernameAvailability(username) { isAvailable in
+                if isAvailable {
+                    saveProfileData()
+                } else {
+                    errorMessage = "Username is already taken."
+                    isUpdating = false
+                }
             }
         }
     }
@@ -170,7 +188,8 @@ struct SettingsView: View {
                 self.errorMessage = "Error checking username: \(error.localizedDescription)"
                 completion(false)
             } else {
-                completion(snapshot?.documents.isEmpty ?? true)
+                let isAvailable = snapshot?.documents.isEmpty ?? true
+                completion(isAvailable)
             }
         }
     }
@@ -178,23 +197,23 @@ struct SettingsView: View {
     // MARK: - Save to Firestore
     private func saveProfileData() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-
         let db = Firestore.firestore()
+
         var userData: [String: Any] = [
             "fullName": self.fullName,
             "username": self.username,
             "instagramHandle": self.instagramHandle,
-            "profilePostFilter": self.selectedFilter.rawValue // store the filter
+            "bio": self.bio,
+            "profilePostFilter": self.selectedFilter.rawValue
         ]
 
-        // If profileImage changed, upload
         if let profileImage = profileImage {
-            let storageRef = FirebaseManager.shared.storage
-                .reference().child("profile_pictures/\(uid).jpg")
+            let storageRef = FirebaseManager.shared.storage.reference().child("profile_pictures/\(uid).jpg")
             guard let imageData = profileImage.jpegData(compressionQuality: 0.7) else {
                 self.isUpdating = false
                 return
             }
+
             storageRef.putData(imageData, metadata: nil) { _, error in
                 if let error = error {
                     self.errorMessage = "Error uploading profile picture: \(error.localizedDescription)"
@@ -207,27 +226,17 @@ struct SettingsView: View {
                         self.isUpdating = false
                         return
                     }
-                    guard let imageUrl = url?.absoluteString else { return }
-                    userData["profilePictureURL"] = imageUrl
+                    userData["profilePictureURL"] = url?.absoluteString
 
-                    db.collection("users").document(uid).updateData(userData) { error in
-                        if let error = error {
-                            self.errorMessage = "Error saving profile data: \(error.localizedDescription)"
-                        }
+                    db.collection("users").document(uid).updateData(userData) { _ in
                         self.isUpdating = false
-                        // close view
                         self.presentationMode.wrappedValue.dismiss()
                     }
                 }
             }
         } else {
-            // No new profile picture
-            db.collection("users").document(uid).updateData(userData) { error in
-                if let error = error {
-                    self.errorMessage = "Error saving profile data: \(error.localizedDescription)"
-                }
+            db.collection("users").document(uid).updateData(userData) { _ in
                 self.isUpdating = false
-                // close
                 self.presentationMode.wrappedValue.dismiss()
             }
         }
@@ -237,23 +246,13 @@ struct SettingsView: View {
     private func loadUserProfile() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
-        db.collection("users").document(uid).getDocument { document, error in
-            if let doc = document, doc.exists {
-                let data = doc.data() ?? [:]
-                self.fullName = data["fullName"] as? String ?? ""
-                self.username = data["username"] as? String ?? ""
-                self.instagramHandle = data["instagramHandle"] as? String ?? ""
-
-                // If no filter stored yet, default to "all"
-                if let rawFilter = data["profilePostFilter"] as? String,
-                   let f = ProfilePostFilter(rawValue: rawFilter) {
-                    self.selectedFilter = f
-                } else {
-                    self.selectedFilter = .all
-                }
-            } else {
-                self.errorMessage = "Error loading profile."
-            }
+        db.collection("users").document(uid).getDocument { document, _ in
+            let data = document?.data() ?? [:]
+            self.fullName = data["fullName"] as? String ?? ""
+            self.username = data["username"] as? String ?? ""
+            self.originalUsername = self.username // Store original username
+            self.bio = data["bio"] as? String ?? ""
+            self.instagramHandle = data["instagramHandle"] as? String ?? ""
         }
     }
 }
