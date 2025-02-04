@@ -9,101 +9,119 @@ struct LoginView: View {
     @State private var errorMessage: String?
 
     @EnvironmentObject var authViewModel: AuthViewModel
-    @Environment(\.dismiss) private var dismiss // To pop back to LandingView after login
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 24) {
             Text("Log In")
                 .font(.custom("BebasNeue-Regular", size: 32))
+                .foregroundColor(.primary)
                 .padding(.top, 40)
 
-            // Segmented control: Email & Password vs. Phone
+            // MARK: - Segmented control
             Picker("Login Method", selection: $isUsingPhoneAuth) {
                 Text("Email & Password").tag(false)
                 Text("Phone Number").tag(true)
             }
             .pickerStyle(SegmentedPickerStyle())
-            .padding(.horizontal)
+            .padding(.horizontal, 40)
 
-            // Email/Phone Input
+            // MARK: - Email/Phone Input
             TextField(isUsingPhoneAuth ? "Phone Number" : "Email", text: $emailOrPhone)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .font(.custom("OpenSans", size: 16))
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
                 .keyboardType(isUsingPhoneAuth ? .phonePad : .emailAddress)
                 .autocapitalization(.none)
-                .padding(.horizontal)
+                .padding(.horizontal, 40)
 
-            // Show either phone verification or password login
+            // MARK: - Phone vs Email Sections - update wknd
             if isUsingPhoneAuth {
                 phoneAuthSection
             } else {
                 emailAuthSection
             }
 
+            // MARK: - Error Message
             if let errorMessage = errorMessage {
                 Text(errorMessage)
-                    .foregroundColor(.red)
                     .font(.custom("OpenSans", size: 14))
-                    .padding(.top)
+                    .foregroundColor(.red)
+                    .padding(.top, 4)
+                    .padding(.horizontal, 40)
+                    .multilineTextAlignment(.center)
             }
 
             Spacer()
         }
-        .padding()
         .background(Color(.systemBackground).ignoresSafeArea())
         .onAppear {
             errorMessage = nil
         }
     }
 
-    // MARK: - Phone Auth Section
+    // MARK: - Phone Auth Section - rewrite/debug wknd
     private var phoneAuthSection: some View {
-        VStack {
+        VStack(spacing: 16) {
             if isVerificationSent {
                 TextField("Enter Verification Code", text: $verificationCode)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .font(.custom("OpenSans", size: 16))
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
                     .keyboardType(.numberPad)
-                    .padding(.horizontal)
+                    .padding(.horizontal, 40)
 
                 Button("Verify Code") {
                     verifyPhoneCode()
                 }
+                .font(.custom("BebasNeue-Regular", size: 18))
+                .foregroundColor(.white)
+                .frame(height: 50)
                 .frame(maxWidth: .infinity)
                 .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(10)
-                .padding(.horizontal)
+                .cornerRadius(12)
+                .padding(.horizontal, 40)
             } else {
                 Button("Send Verification Code") {
                     sendVerificationCode()
                 }
+                .font(.custom("BebasNeue-Regular", size: 18))
+                .foregroundColor(.white)
+                .frame(height: 50)
                 .frame(maxWidth: .infinity)
                 .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(10)
-                .padding(.horizontal)
+                .cornerRadius(12)
+                .padding(.horizontal, 40)
             }
         }
     }
 
     // MARK: - Email Auth Section
     private var emailAuthSection: some View {
-        VStack {
+        VStack(spacing: 16) {
             SecureField("Password", text: $password)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
+                .font(.custom("OpenSans", size: 16))
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
+                .padding(.horizontal, 40)
 
             Button("Log In") {
                 logInWithEmail()
             }
-            .frame(maxWidth: .infinity)
-            .background(Color.green)
+            .font(.custom("BebasNeue-Regular", size: 18))
             .foregroundColor(.white)
-            .cornerRadius(10)
-            .padding(.horizontal)
+            .frame(height: 50)
+            .frame(maxWidth: .infinity)
+            .background(Color.blue)
+            .cornerRadius(12)
+            .padding(.horizontal, 40)
         }
     }
 
-    // MARK: - Phone Auth Functions
+    // MARK: - Phone Auth Functions - wknd
     private func sendVerificationCode() {
         authViewModel.sendVerificationCode(phoneNumber: emailOrPhone) { error in
             if let error = error {
@@ -135,9 +153,8 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - Handle Login Success
+    // MARK: - Handle Login Success 
     private func handleSuccessfulLogin() {
-        // Add a short delay to prevent UI clashes before navigating away
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             dismiss()
         }

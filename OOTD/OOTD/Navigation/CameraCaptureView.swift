@@ -9,7 +9,7 @@ struct CameraCaptureView: View {
     @StateObject private var cameraModel = CameraModel()
     @State private var isPostOOTDViewPresented: Bool = false
     
-    // New state for blocking
+    // new state
     @State private var canPostToday: Bool = false
     
     var body: some View {
@@ -32,7 +32,7 @@ struct CameraCaptureView: View {
                 
                 // Buttons
                 HStack(spacing: 40) {
-                    // Flip Camera
+                    // flip
                     Button(action: {
                         cameraModel.toggleCamera()
                     }) {
@@ -44,7 +44,7 @@ struct CameraCaptureView: View {
                             .clipShape(Circle())
                     }
                     
-                    // Capture Photo Button (Disabled if already posted)
+                    // Capture Photo Button (disable if already posted-)
                     Button(action: {
                         cameraModel.takePhoto()
                     }) {

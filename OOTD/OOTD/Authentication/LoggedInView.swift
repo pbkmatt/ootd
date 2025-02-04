@@ -27,16 +27,16 @@ struct LoggedInView: View {
                 }
                 .tag(2)
 
-            // CLOSET (replacing Notifications!)
+            // CLOSET (fixing thurs)
             NavigationView {
                 ClosetsView()
             }
             .tabItem {
-                Text("🧥") // or "👚", or "hanger" text, or a custom SFSymbol if you have one
+                Image(systemName: "briefcase.fill")
             }
             .tag(3)
 
-            // Profile
+            // upv
             NavigationView {
                 UserProfileView()
             }

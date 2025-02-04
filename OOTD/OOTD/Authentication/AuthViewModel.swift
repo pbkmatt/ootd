@@ -17,7 +17,7 @@ class AuthViewModel: ObservableObject {
     @Published var currentPhone: String = ""
     @Published var currentPassword: String = ""
 
-    // For phone auth
+    // For phone auth - pushing phone auth to wknd
     @Published var verificationID: String? = nil
     @Published var isVerificationSent: Bool = false
     @Published var authErrorMessage: String? = nil
@@ -58,7 +58,7 @@ class AuthViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Fetch Current User Doc with Debug
+    // MARK: - Added debug to fetching currentuserdoc
     private func fetchCurrentUserDoc(uid: String) {
         let docRef = db.collection("users").document(uid)
         docRef.getDocument { snapshot, error in
@@ -101,7 +101,7 @@ class AuthViewModel: ObservableObject {
                     print("🕓 This user was created at: \(dateVal)")
                 }
             } catch {
-                // If decode fails, we show the reason
+                // If decode fails, show reason
                 print("❌ Decode error: \(error.localizedDescription)")
                 self.isAuthenticated = false
                 self.needsProfileSetup = true
@@ -110,7 +110,7 @@ class AuthViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Check Email Availability
+    // MARK: - Check firestore for email
     func checkEmailAvailability(email: String, completion: @escaping (Bool, String?) -> Void) {
         db.collection("users").whereField("email", isEqualTo: email)
             .getDocuments { snapshot, error in
@@ -136,7 +136,7 @@ class AuthViewModel: ObservableObject {
         password: String,
         completion: @escaping (String?) -> Void
     ) {
-        // Step 1: Create user in Firebase Auth
+        // step 1
         Auth.auth().createUser(withEmail: currentEmail, password: password) { result, error in
             if let error = error {
                 completion("Error creating user: \(error.localizedDescription)")
@@ -148,9 +148,9 @@ class AuthViewModel: ObservableObject {
             }
             let uid = firebaseUser.uid
 
-            // Step 2: Upload profile image if any
+            // step 2 profile image required
             self.uploadProfileImage(profileImage: profileImage, uid: uid) { imageURL in
-                // Step 3: Store user data in Firestore
+                // Step 3 store
                 let userData: [String: Any] = [
                     "fullName": fullName,
                     "username": username.lowercased(),

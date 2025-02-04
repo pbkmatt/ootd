@@ -143,7 +143,7 @@ struct HomeView: View {
             let boundary = Date.today4AMInEST()
             let db = Firestore.firestore()
 
-            // If excludeIds has 10 or fewer items, we can do a "not-in" query
+            // If excludeIds has 10 or fewer items, cannot do a "not-in" query
             if excludeIds.count <= 10 {
                 db.collection("posts")
                     .whereField("uid", notIn: excludeIds)

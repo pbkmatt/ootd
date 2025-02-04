@@ -75,8 +75,7 @@ struct ClosetDetailView: View {
         
         let db = Firestore.firestore()
         
-        // Firestore "in" queries can only handle up to 10 IDs at a time
-        // If you may have more, chunk them. For simplicity, assume <= 10.
+        // may need to chunk posts in future, will only handle 10 posts at a time
         db.collection("posts")
             .whereField(FieldPath.documentID(), in: closet.postIds)
             .getDocuments { snapshot, error in

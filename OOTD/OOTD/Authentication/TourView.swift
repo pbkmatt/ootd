@@ -1,9 +1,10 @@
 import SwiftUI
+// this page does nothing right now and might remove it entirely
 
 struct TourView: View {
     @State private var currentPage = 0
     @EnvironmentObject var authViewModel: AuthViewModel
-    @Environment(\.presentationMode) var presentationMode  // Allows manual dismissal
+    @Environment(\.presentationMode) var presentationMode  // manual dismissal
 
     var body: some View {
         TabView(selection: $currentPage) {
@@ -32,8 +33,8 @@ struct TourView: View {
                     .multilineTextAlignment(.center)
 
                 Button(action: {
-                    authViewModel.isAuthenticated = true  // ✅ Mark user as authenticated
-                    presentationMode.wrappedValue.dismiss()  // ✅ Dismiss TourView
+                    authViewModel.isAuthenticated = true  // 
+                    presentationMode.wrappedValue.dismiss()  //
                 }) {
                     Text("Start Now")
                         .font(Font.custom("BebasNeue-Regular", size: 18))

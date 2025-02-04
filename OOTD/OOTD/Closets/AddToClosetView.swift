@@ -13,7 +13,7 @@ struct AddToClosetView: View {
     
     @StateObject private var closetViewModel = ClosetViewModel()
     
-    let postId: String  // The ID of the post we want to save
+    let postId: String  // The post id
     
     // For creating a new closet
     @State private var newClosetName: String = ""
@@ -22,7 +22,7 @@ struct AddToClosetView: View {
     var body: some View {
         NavigationView {
             VStack {
-                // Optional: toggle to show/hide “create new closet” text field
+                // new closet optional
                 if showNewClosetField {
                     TextField("Closet name", text: $newClosetName)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -50,7 +50,7 @@ struct AddToClosetView: View {
                     }
                 }
                 
-                // List of existing closets
+                // current closets/existing closets
                 List {
                     ForEach(closetViewModel.closets) { closet in
                         Button(action: {

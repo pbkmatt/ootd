@@ -4,8 +4,6 @@ import FirebaseFirestore
 import FirebaseAuth
 
 struct OtherProfileView: View {
-    // We receive a user object, but we’ll re-fetch it to ensure
-    // we have the latest data (followersCount, followingCount, etc.).
     let initialUser: UserModel
 
     @State private var user: UserModel
@@ -18,26 +16,27 @@ struct OtherProfileView: View {
 
     init(user: UserModel) {
         self.initialUser = user
-        // Make a local copy we can update after fetch
         _user = State(initialValue: user)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             if isLoading {
-                ProgressView("Loading \(user.username)…")
-                    .progressViewStyle(CircularProgressViewStyle(tint: .gray))
-                    .scaleEffect(1.3)
-                    .padding(.top, 50)
+                VStack(spacing: 16) {
+                    ProgressView("Loading \(user.username)…")
+                        .progressViewStyle(CircularProgressViewStyle(tint: .gray))
+                        .scaleEffect(1.3)
+                }
+                .padding(.top, 50)
             } else {
                 ScrollView {
-                    VStack(spacing: 16) {
-                        // Header w/ profile pic, username, follow button, etc.
+                    VStack(spacing: 20) {
+                        // MARK: - Profile Header
                         ProfileHeaderView(user: $user, isFollowing: $isFollowing)
 
-                        // Show "Today's OOTD" (if any)
+                        // MARK: - Today's OOTD
                         if let post = todaysOOTD {
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 Text("Today's OOTD")
                                     .font(.custom("BebasNeue-Regular", size: 20))
                                     .padding(.leading, 8)
@@ -51,20 +50,19 @@ struct OtherProfileView: View {
                                     } placeholder: {
                                         ProgressView()
                                     }
-                                    .padding(.horizontal)
+                                    .padding(.horizontal, 16)
                                 }
                             }
                         }
 
-                        // Show Past OOTDs in a 2-column grid
+                        // MARK: - Past OOTDs
                         if !pastOOTDs.isEmpty {
-                            VStack(alignment: .leading, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 12) {
                                 Text("\(user.username)’s Past OOTDs")
                                     .font(.custom("BebasNeue-Regular", size: 20))
                                     .padding(.leading, 8)
 
-                                LazyVGrid(columns: [GridItem(.flexible()),
-                                                    GridItem(.flexible())],
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())],
                                           spacing: 16) {
                                     ForEach(pastOOTDs) { post in
                                         NavigationLink(destination: PostView(post: post)) {
@@ -72,26 +70,30 @@ struct OtherProfileView: View {
                                                 image
                                                     .resizable()
                                                     .scaledToFill()
-                                                    .frame(width: UIScreen.main.bounds.width / 2 - 20,
-                                                           height: UIScreen.main.bounds.width / 2 - 20)
+                                                    .frame(
+                                                        width: UIScreen.main.bounds.width/2 - 20,
+                                                        height: UIScreen.main.bounds.width/2 - 20
+                                                    )
                                                     .cornerRadius(10)
                                                     .clipped()
                                             } placeholder: {
                                                 Color.gray
-                                                    .frame(width: UIScreen.main.bounds.width / 2 - 20,
-                                                           height: UIScreen.main.bounds.width / 2 - 20)
+                                                    .frame(
+                                                        width: UIScreen.main.bounds.width/2 - 20,
+                                                        height: UIScreen.main.bounds.width/2 - 20
+                                                    )
                                                     .cornerRadius(10)
                                             }
                                         }
                                     }
                                 }
-                                .padding(.horizontal)
+                                .padding(.horizontal, 16)
                             }
                         } else if todaysOOTD == nil {
-                            // If they have no posts at all:
                             Text("No OOTDs yet!")
+                                .font(.custom("OpenSans", size: 14))
                                 .foregroundColor(.gray)
-                                .padding(.top, 20)
+                                .padding(.top, 16)
                         }
                     }
                     .padding(.top, 12)
@@ -101,15 +103,18 @@ struct OtherProfileView: View {
                 }
             }
 
-            // If any error
+            // MARK: - Error
             if let errorMessage = errorMessage {
                 Text(errorMessage)
+                    .font(.custom("OpenSans", size: 14))
                     .foregroundColor(.red)
                     .padding()
+                    .multilineTextAlignment(.center)
             }
         }
         .navigationTitle("@\(user.username)")
         .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemBackground).ignoresSafeArea())
         .onAppear {
             Task {
                 await reloadProfileAndPosts()
@@ -131,7 +136,7 @@ struct OtherProfileView: View {
                 .document(initialUser.uid)
                 .getDocument()
 
-            guard let data = document.data() else {
+            guard let _ = document.data() else {
                 DispatchQueue.main.async {
                     self.errorMessage = "User not found or has been deleted."
                     self.isLoading = false
@@ -163,14 +168,8 @@ struct OtherProfileView: View {
             let posts = snapshot.documents.compactMap { try? $0.data(as: OOTDPost.self) }
             let boundary = Date.today4AMInEST()
 
-            // "Today’s" = any post with timestamp >= boundary
-            let todays = posts.first(where: {
-                $0.timestamp.dateValue() >= boundary
-            })
-
-            let past = posts.filter {
-                $0.timestamp.dateValue() < boundary
-            }
+            let todays = posts.first(where: { $0.timestamp.dateValue() >= boundary })
+            let past = posts.filter { $0.timestamp.dateValue() < boundary }
 
             DispatchQueue.main.async {
                 self.todaysOOTD = todays
@@ -199,6 +198,7 @@ struct OtherProfileView: View {
         FollowService.shared.isFollowing(targetUserId: user.uid) { following in
             DispatchQueue.main.async {
                 self.isFollowing = following
+                self.isLoading = false
             }
         }
     }
@@ -210,14 +210,15 @@ struct ProfileHeaderView: View {
     @Binding var isFollowing: Bool
 
     var body: some View {
-        VStack(spacing: 8) {
-            // Profile Picture
+        VStack(spacing: 12) {
+            // MARK: - Profile Picture
             if let url = URL(string: user.profilePictureURL), !user.profilePictureURL.isEmpty {
                 AsyncImage(url: url) { image in
-                    image.resizable()
-                         .scaledToFill()
-                         .frame(width: 120, height: 120)
-                         .clipShape(Circle())
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 120, height: 120)
+                        .clipShape(Circle())
                 } placeholder: {
                     Circle()
                         .fill(Color.gray.opacity(0.3))
@@ -229,7 +230,7 @@ struct ProfileHeaderView: View {
                     .frame(width: 120, height: 120)
             }
 
-            // Full Name + Username
+            // MARK: - Full Name + Username
             Text(user.fullName)
                 .font(.custom("BebasNeue-Regular", size: 22))
 
@@ -237,26 +238,25 @@ struct ProfileHeaderView: View {
                 .font(.custom("BebasNeue-Regular", size: 16))
                 .foregroundColor(.secondary)
 
-            // Stats Row
+            // MARK: - Stats
             HStack(spacing: 24) {
                 VStack {
                     Text("\(user.followersCount)")
-                        .font(.headline)
+                        .font(.custom("BebasNeue-Regular", size: 18))
                     Text("Followers")
-                        .font(.subheadline)
+                        .font(.custom("OpenSans", size: 14))
                         .foregroundColor(.secondary)
                 }
                 VStack {
                     Text("\(user.followingCount)")
-                        .font(.headline)
+                        .font(.custom("BebasNeue-Regular", size: 18))
                     Text("Following")
-                        .font(.subheadline)
+                        .font(.custom("OpenSans", size: 14))
                         .foregroundColor(.secondary)
                 }
             }
-            .padding(.top, 4)
 
-            // Follow/Unfollow (if it’s not my own profile)
+            // MARK: - Follow/Unfollow
             if let currentUid = Auth.auth().currentUser?.uid,
                currentUid != user.uid {
                 Button(action: {
@@ -269,7 +269,7 @@ struct ProfileHeaderView: View {
                     Text(isFollowing ? "Unfollow" : "Follow")
                         .font(.custom("BebasNeue-Regular", size: 16))
                         .foregroundColor(.white)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 8)
                         .padding(.horizontal, 24)
                         .background(isFollowing ? Color.red : Color.blue)
                         .cornerRadius(8)
@@ -277,7 +277,7 @@ struct ProfileHeaderView: View {
                 .padding(.top, 4)
             }
         }
-        .padding(.vertical)
+        .padding(.vertical, 12)
     }
 
     // MARK: - Follow
@@ -289,7 +289,6 @@ struct ProfileHeaderView: View {
             }
             DispatchQueue.main.async {
                 self.isFollowing = true
-                // Also increment the local counts immediately for UI
                 user.followersCount += 1
             }
         }
@@ -304,7 +303,6 @@ struct ProfileHeaderView: View {
             }
             DispatchQueue.main.async {
                 self.isFollowing = false
-                // Decrement local counts
                 user.followersCount = max(0, user.followersCount - 1)
             }
         }

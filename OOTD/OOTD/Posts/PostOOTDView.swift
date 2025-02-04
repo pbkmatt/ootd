@@ -11,10 +11,8 @@ struct PostOOTDView: View {
     @State private var isUploading: Bool = false
     @State private var uploadProgress: Double = 0.0
 
-    // Replace old tags array with an array of TaggedItem
     @State private var taggedItems: [TaggedItem] = []
 
-    // For adding a new item
     @State private var currentItemName: String = ""
     @State private var currentItemLink: String = ""
 
@@ -24,45 +22,64 @@ struct PostOOTDView: View {
 
     var body: some View {
         NavigationView {
-            VStack {
-                // The captured photo
+            VStack(spacing: 16) {
+                
+                // MARK: - Captured Photo
                 Image(uiImage: capturedImage)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxHeight: 300)
-                    .cornerRadius(10)
-                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: 300)
+                    .cornerRadius(12)
+                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                
+                // MARK: - Caption
+                TextField("Add a caption...", text: $caption)
+                    .font(.custom("OpenSans", size: 15))
+                    .padding(12)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
 
-                // Caption
-                TextField("Write a caption...", text: $caption)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding()
-
-                // MARK: - Tagged Items UI
+                // MARK: - Tagged Items
                 taggedItemsSection
 
-                // Upload Progress or Upload Button
+                // MARK: - Upload Action
                 if isUploading {
-                    ProgressView(value: uploadProgress, total: 1.0)
-                        .padding()
+                    VStack(spacing: 8) {
+                        ProgressView(value: uploadProgress, total: 1.0)
+                            .progressViewStyle(LinearProgressViewStyle(tint: Color.blue))
+                            .padding(.horizontal)
+                        
+                        Text("Uploading…")
+                            .font(.custom("OpenSans", size: 14))
+                            .foregroundColor(.gray)
+                    }
                 } else {
                     Button(action: uploadPost) {
-                        Text("Post OOTD")
-                            .bold()
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
+                        Text("Share OOTD")
+                            .font(.custom("BebasNeue-Regular", size: 18))
                             .foregroundColor(.white)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(caption.isEmpty ? Color.gray : Color.blue)
                             .cornerRadius(10)
                             .padding(.horizontal)
                     }
                     .disabled(caption.isEmpty)
                 }
             }
-            .navigationBarTitle("Post Your OOTD", displayMode: .inline)
-            .navigationBarItems(trailing: Button("Cancel") {
-                presentationMode.wrappedValue.dismiss()
-            })
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitle("Post Your OOTD")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .font(.custom("OpenSans", size: 16))
+                }
+            }
             .alert(isPresented: $showAlert) {
                 Alert(title: Text("Error"),
                       message: Text(alertMessage),
@@ -73,54 +90,67 @@ struct PostOOTDView: View {
 
     // MARK: - Tagged Items Section
     private var taggedItemsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Tag up to 5 items:")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Tag your items (up to five):")
+                .font(.custom("BebasNeue-Regular", size: 16))
                 .padding(.horizontal)
-
-            // A list of existing items
+                .padding(.top, 4)
+            
+            // List of existing tagged items
             ForEach(taggedItems) { item in
                 HStack {
                     Text(item.name)
-                        .fontWeight(.medium)
+                        .font(.custom("OpenSans", size: 14))
+                        .fontWeight(.semibold)
+                    
+                    // Only show link if it exists
                     if let link = item.link, !link.isEmpty {
                         Text("(Link: \(link))")
-                            .font(.footnote)
+                            .font(.custom("OpenSans", size: 12))
                             .foregroundColor(.blue)
                     }
+                    
                     Spacer()
                 }
                 .padding(.horizontal)
             }
-
+            
             // Add new item fields
-            HStack {
-                VStack(alignment: .leading) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
                     TextField("Item name", text: $currentItemName)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .font(.custom("OpenSans", size: 14))
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
                         .disableAutocorrection(true)
                         .autocapitalization(.none)
+                    
                     TextField("Optional link", text: $currentItemLink)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .font(.custom("OpenSans", size: 14))
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
                         .disableAutocorrection(true)
                         .autocapitalization(.none)
                 }
                 .frame(minWidth: 0, maxWidth: .infinity)
-
+                
                 Button(action: addTaggedItem) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 24))
-                        .padding(.leading, 8)
+                        .foregroundColor(taggedItems.count >= 5 || currentItemName.isEmpty ? .gray : .blue)
                 }
                 .disabled(taggedItems.count >= 5 || currentItemName.isEmpty)
             }
             .padding(.horizontal)
+            .padding(.bottom, 8)
         }
+        .background(Color.white)
     }
-
+    
     // MARK: - Add a tagged item
     private func addTaggedItem() {
-        // Validate name
         guard TaggedItem.isValidName(currentItemName) else {
             alertMessage = "Item name must be letters/numbers/spaces only (1–40 chars)."
             showAlert = true
@@ -139,10 +169,10 @@ struct PostOOTDView: View {
     }
 
     // MARK: - Upload Post
-    func uploadPost() {
+    private func uploadPost() {
         isUploading = true
-
-        // 1) Fetch the user’s profile so we can attach username & profileImage
+        
+        // 1) Fetch user’s profile so we can attach username & profileImage
         fetchUserProfile { userProfile in
             // 2) Add watermark with the username
             let watermarked = capturedImage.addWatermark(
@@ -199,18 +229,18 @@ struct PostOOTDView: View {
             // Optionally track progress
             uploadTask.observe(.progress) { snapshot in
                 if let progress = snapshot.progress {
-                    uploadProgress = Double(progress.completedUnitCount)
-                                   / Double(progress.totalUnitCount)
+                    uploadProgress = Double(progress.completedUnitCount) / Double(progress.totalUnitCount)
                 }
             }
         }
     }
 
     // MARK: - Save Post to Firestore
-    private func savePostToFirestore(imageURL: String, userProfile: (uid: String, username: String, profileImg: String)) {
+    private func savePostToFirestore(imageURL: String,
+                                     userProfile: (uid: String, username: String, profileImg: String)) {
         let db = Firestore.firestore()
 
-        // Convert the array of TaggedItem to an array of dictionaries
+        // Convert array of TaggedItem to an array of dictionaries
         let taggedItemsData = taggedItems.map { item -> [String: Any] in
             [
                 "id": item.id,
@@ -225,7 +255,7 @@ struct PostOOTDView: View {
             "profileImage": userProfile.profileImg,
             "caption": caption.isEmpty ? "No caption" : caption,
             "imageURL": imageURL,
-            "taggedItems": taggedItemsData, // <— array of dictionaries
+            "taggedItems": taggedItemsData,
             "timestamp": Timestamp(),
             "visibility": "public",
             "commentsCount": 0,
@@ -246,8 +276,8 @@ struct PostOOTDView: View {
         }
     }
 
-    // MARK: - Fetch user’s profile (username, profilePictureURL)
-    func fetchUserProfile(completion: @escaping ((uid: String, username: String, profileImg: String)) -> Void) {
+    // MARK: - Fetch user’s profile
+    private func fetchUserProfile(completion: @escaping ((uid: String, username: String, profileImg: String)) -> Void) {
         guard let currentUser = Auth.auth().currentUser else {
             completion(("guestUID", "guest", ""))
             return

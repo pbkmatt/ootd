@@ -18,93 +18,118 @@ struct ProfileSetupView: View {
     @State private var isCreatingAccount = false
 
     @EnvironmentObject var authViewModel: AuthViewModel
-    @Environment(\.dismiss) private var dismiss  // ✅ Use dismiss() to close the view properly
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 24) {
             Text("Set Up Your Profile")
-                .font(.custom("BebasNeue-Regular", size: 24))
+                .font(.custom("BebasNeue-Regular", size: 30))
+                .foregroundColor(.primary)
                 .padding(.top, 40)
 
-            // Show email or phone if present (they're disabled here)
+            // MARK: - Email or Phone Display (Disabled)
             if !authViewModel.currentEmail.isEmpty {
                 TextField("", text: .constant(authViewModel.currentEmail))
+                    .font(.custom("OpenSans", size: 16))
                     .disabled(true)
                     .padding()
-                    .background(Color.gray.opacity(0.3))
+                    .background(Color.gray.opacity(0.2))
                     .cornerRadius(8)
-                    .padding(.horizontal)
+                    .padding(.horizontal, 40)
             }
             if !authViewModel.currentPhone.isEmpty {
                 TextField("", text: .constant(authViewModel.currentPhone))
+                    .font(.custom("OpenSans", size: 16))
                     .disabled(true)
                     .padding()
-                    .background(Color.gray.opacity(0.3))
+                    .background(Color.gray.opacity(0.2))
                     .cornerRadius(8)
-                    .padding(.horizontal)
+                    .padding(.horizontal, 40)
             }
 
-            // Profile Image Picker
+            // MARK: - Profile Image Picker
             PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                if let image = profileImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 120, height: 120)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.gray, lineWidth: 2))
-                        .shadow(radius: 5)
-                } else {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 120, height: 120)
-                        .overlay(Text("Choose Photo").foregroundColor(.white))
+                ZStack {
+                    if let image = profileImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 120, height: 120)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.gray, lineWidth: 2))
+                            .shadow(radius: 5)
+                    } else {
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 120, height: 120)
+                            .overlay(
+                                Text("Choose Photo")
+                                    .font(.custom("OpenSans", size: 14))
+                                    .foregroundColor(.white)
+                            )
+                    }
                 }
             }
             .onChange(of: selectedPhotoItem) { _ in
                 loadProfileImage()
             }
 
-            // Full Name
+            // MARK: - Full Name
             TextField("Full Name", text: $fullName)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .font(.custom("OpenSans", size: 16))
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
                 .autocapitalization(.words)
-                .padding(.horizontal)
+                .padding(.horizontal, 40)
 
-            // Username
+            // MARK: - Username
             TextField("Username", text: $username)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .font(.custom("OpenSans", size: 16))
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
                 .autocapitalization(.none)
-                .padding(.horizontal)
+                .padding(.horizontal, 40)
 
-            // Bio
+            // MARK: - Bio
             TextField("Bio (Optional, max 80 chars)", text: $bio)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .font(.custom("OpenSans", size: 16))
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
                 .autocapitalization(.sentences)
-                .padding(.horizontal)
+                .padding(.horizontal, 40)
 
-            // Instagram Handle
+            // MARK: - Instagram Handle
             TextField("Instagram Handle (Optional)", text: $instagramHandle)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .font(.custom("OpenSans", size: 16))
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
                 .autocapitalization(.none)
-                .padding(.horizontal)
+                .padding(.horizontal, 40)
 
-            // "Create Account"
+            // MARK: - Create Account Button
             Button("Create Account") {
                 submitProfile()
             }
-            .disabled(isCreatingAccount)
+            .font(.custom("BebasNeue-Regular", size: 18))
+            .foregroundColor(.white)
+            .frame(height: 50)
             .frame(maxWidth: .infinity)
             .background(isCreatingAccount ? Color.gray : Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(10)
-            .padding(.horizontal)
+            .cornerRadius(12)
+            .padding(.horizontal, 40)
+            .disabled(isCreatingAccount)
 
+            // MARK: - Error Message
             if let errorMessage = errorMessage {
                 Text(errorMessage)
-                    .foregroundColor(.red)
                     .font(.custom("OpenSans", size: 14))
-                    .padding(.top, 4)
+                    .foregroundColor(.red)
+                    .padding(.horizontal, 40)
+                    .multilineTextAlignment(.center)
             }
 
             Spacer()
@@ -112,12 +137,10 @@ struct ProfileSetupView: View {
         .background(Color(.systemBackground).ignoresSafeArea())
     }
 
-    // MARK: - Create Account in Firestore
+    // MARK: - Create Account
     private func submitProfile() {
         errorMessage = nil
-        guard !fullName.isEmpty,
-              !username.isEmpty,
-              profileImage != nil else {
+        guard !fullName.isEmpty, !username.isEmpty, profileImage != nil else {
             errorMessage = "All required fields must be filled."
             return
         }
@@ -136,7 +159,6 @@ struct ProfileSetupView: View {
                     self.errorMessage = error
                     self.isCreatingAccount = false
                 } else {
-                    // ✅ Dismiss ProfileSetupView properly after successful creation
                     dismiss()
                 }
             }
